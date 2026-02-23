@@ -10,6 +10,46 @@ Paragraph breaks get a 2.5× pause multiplier — you should feel the gap betwee
 
 Short words: I am on a bus. Long words: internationalization, encapsulation, asynchronously. Very long: incomprehensibility. Punctuation pauses: wait; then stop. Ellipsis… and em-dash — both slow the reader down.
 
+## Lists
+
+### Unordered
+
+- First item at the top level
+- Second item with **bold** and *italic* and `inline code`
+- Third item is a bit longer to check that text renders cleanly past the bullet
+- Fourth item
+
+### Ordered
+
+1. Parse the markdown source with the `marked` lexer
+2. Walk tokens to build the section tree and block list
+3. Extract inline tokens into RSVP frames for prose blocks
+4. Collect visual blocks — code, mermaid, table, list
+5. Attach frame ranges to sections and blocks for navigation
+
+### Nested
+
+- Rendering
+  - Block viewer handles code, mermaid, table, list
+  - ToC sidebar handles ORP word and context buffer
+  - Status bar handles WPM, progress, time remaining
+- Navigation
+  - `j` / `k` jump between sections
+  - `n` / `p` cycle through visual blocks in a section
+  - `x` pins the current block
+- Playback
+  - Space toggles play/pause
+  - Arrow keys step one word at a time when paused
+  - Section boundary triggers automatic pause
+
+### Boundary Conditions
+
+A single-item list:
+
+- Only one item here
+
+A long item that may need truncation in narrow terminals — this item has quite a lot of text in it and should still render on one line without wrapping in the block viewer pane.
+
 ## Syntax Highlighting
 
 ### TypeScript

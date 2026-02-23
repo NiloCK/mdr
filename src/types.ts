@@ -99,7 +99,7 @@ export interface Frame {
 export interface VisualBlock {
   blockId: number;
   sectionId: number;
-  type: 'code' | 'mermaid' | 'table' | 'ascii';
+  type: 'code' | 'mermaid' | 'table' | 'ascii' | 'list';
   language?: string;
   content: string;
   /** Pre-rendered terminal string (syntax-highlighted code, ASCII mermaid, etc.) */

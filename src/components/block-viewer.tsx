@@ -222,6 +222,24 @@ const ContentLine: React.FC<ContentLineProps> = ({
     );
   }
 
+  if (blockType === 'list') {
+    // Color the leading bullet/number, leave item text unstyled
+    const match = displayText.match(/^(\s*)(•|\d+\.)\s/);
+    if (match) {
+      const indent = match[1] ?? '';
+      const bullet = match[2] ?? '';
+      const rest = displayText.slice(indent.length + bullet.length + 1);
+      return (
+        <Text>
+          <Text>{indent}</Text>
+          <Text color="cyan" bold>{bullet}</Text>
+          <Text>{' ' + rest}</Text>
+        </Text>
+      );
+    }
+    return <Text>{displayText}</Text>;
+  }
+
   if (blockType === 'table') {
     if (line.tableRole === 'header') {
       return <Text bold color="cyan">{displayText}</Text>;
@@ -252,6 +270,15 @@ function renderBlockContent(
   maxHeight: number,
 ): RenderedLine[] {
   const lines: RenderedLine[] = [];
+
+  // Lists are pre-rendered at parse time.
+  if (block.type === 'list') {
+    const rawLines = block.content.split('\n');
+    for (const raw of rawLines) {
+      lines.push({ text: expandTabs(raw) });
+    }
+    return applyOverflow(lines, maxHeight);
+  }
 
   // Tables are pre-rendered at parse time; just annotate roles per line.
   if (block.type === 'table') {
@@ -336,6 +363,8 @@ function getTypeLabel(block: VisualBlock): string {
       return '◈ Diagram';
     case 'table':
       return '▦ Table';
+    case 'list':
+      return '≡ List';
     case 'ascii':
       return '▣ ASCII Art';
     default:

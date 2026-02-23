@@ -38,11 +38,11 @@ export function parseDocument(markdown: string): Document {
 export function collectVisualBlocks(doc: Document): VisualBlock[] {
   const out: VisualBlock[] = [];
   for (const block of doc.blocks) {
-    if (block.type === 'code' || block.type === 'mermaid' || block.type === 'table') {
+    if (block.type === 'code' || block.type === 'mermaid' || block.type === 'table' || block.type === 'list') {
       out.push({
         blockId: block.id,
         sectionId: block.sectionId,
-        type: block.type === 'table' ? 'table' : block.type,
+        type: block.type,
         language: block.language,
         content: block.content,
       });
@@ -534,47 +534,8 @@ class ParseContext {
 
         case 'list': {
           const t = token as Tokens.List;
-          const section = this.currentSection();
-          const block = this.addBlock('list', t.raw);
-
-          for (const item of t.items) {
-            // Each list item may have inline tokens
-            if (item.tokens && item.tokens.length > 0) {
-              for (const subToken of item.tokens) {
-                if (subToken.type === 'text') {
-                  const st = subToken as Tokens.Text;
-                  if (st.tokens && st.tokens.length > 0) {
-                    this.walkInlineTokens(st.tokens, block.id, section.id, DEFAULT_FMT);
-                  } else {
-                    const words = (st.text ?? '').split(/\s+/).filter((w: string) => w.length > 0);
-                    for (const w of words) {
-                      this.addFrame(w, block.id, section.id, DEFAULT_FMT);
-                    }
-                  }
-                } else if (subToken.type === 'paragraph') {
-                  const sp = subToken as Tokens.Paragraph;
-                  this.walkInlineTokens(sp.tokens, block.id, section.id, DEFAULT_FMT);
-                }
-              }
-              // Pause between list items
-              if (this.frames.length > 0) {
-                this.frames[this.frames.length - 1]!.pauseMultiplier = Math.max(
-                  this.frames[this.frames.length - 1]!.pauseMultiplier,
-                  1.8,
-                );
-              }
-            }
-          }
-
-          // End of list
-          if (this.frames.length > 0) {
-            this.frames[this.frames.length - 1]!.pauseMultiplier = Math.max(
-              this.frames[this.frames.length - 1]!.pauseMultiplier,
-              2.5,
-            );
-          }
-
-          block.frameEnd = this.frames.length - 1;
+          // Lists render as visual blocks in the block viewer — no RSVP frames.
+          this.addBlock('list', renderAsciiList(t));
           break;
         }
 
@@ -843,6 +804,47 @@ export function buildContext(
   }
 
   return { before, current: frame.word, after };
+}
+
+// ─── ASCII List Renderer ─────────────────────────────────────────────────────
+//
+// Converts a marked Tokens.List into a clean indented string.
+// Ordered lists use "1." style; unordered use "•".
+// Nested sub-lists are indented two spaces per level.
+
+function renderAsciiList(t: Tokens.List): string {
+  const lines: string[] = [];
+
+  const renderItem = (item: Tokens.ListItem, index: number, ordered: boolean, depth: number) => {
+    const indent = '  '.repeat(depth);
+    const bullet = ordered ? `${index + 1}.` : '•';
+    const text = extractListItemText(item);
+    if (text) lines.push(`${indent}${bullet} ${text}`);
+
+    // Recurse into nested sub-lists
+    for (const sub of item.tokens ?? []) {
+      if (sub.type === 'list') {
+        const subList = sub as Tokens.List;
+        subList.items.forEach((subItem, i) => renderItem(subItem, i, subList.ordered, depth + 1));
+      }
+    }
+  };
+
+  t.items.forEach((item, i) => renderItem(item, i, t.ordered, 0));
+  return lines.join('\n');
+}
+
+function extractListItemText(item: Tokens.ListItem): string {
+  let text = '';
+  for (const token of item.tokens ?? []) {
+    if (token.type === 'text') text += (token as Tokens.Text).text;
+    else if (token.type === 'paragraph') text += (token as Tokens.Paragraph).text;
+  }
+  return text
+    .replace(/\*\*(.+?)\*\*/g, '$1')
+    .replace(/\*(.+?)\*/g, '$1')
+    .replace(/`(.+?)`/g, '$1')
+    .trim();
 }
 
 // ─── ASCII Table Renderer ────────────────────────────────────────────────────
