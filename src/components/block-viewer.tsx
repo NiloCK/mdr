@@ -7,6 +7,7 @@
 
 import React, { useMemo } from 'react';
 import { Box, Text } from 'ink';
+import { highlight } from 'cli-highlight';
 import type { VisualBlock } from '../types.js';
 
 // ─── Props ──────────────────────────────────────────────────────────────────
@@ -159,6 +160,8 @@ interface RenderedLine {
   text: string;
   lineNumber?: number;
   isOverflowIndicator?: boolean;
+  /** true when text already contains ANSI escape codes from cli-highlight */
+  highlighted?: boolean;
 }
 
 const ContentLine: React.FC<ContentLineProps> = ({
@@ -184,7 +187,11 @@ const ContentLine: React.FC<ContentLineProps> = ({
     : '';
 
   const codeWidth = Math.max(1, maxWidth - gutterWidth);
-  const displayText = truncate(line.text, codeWidth);
+  // For ANSI-highlighted lines, measure visible length (strip escapes) but keep
+  // the original string so colors are preserved. Only truncate if it's too long.
+  const displayText = line.highlighted
+    ? truncateAnsi(line.text, codeWidth)
+    : truncate(line.text, codeWidth);
 
   if (blockType === 'code') {
     return (
@@ -193,7 +200,9 @@ const ContentLine: React.FC<ContentLineProps> = ({
           <Text dimColor color="gray">{gutterStr}</Text>
         ) : null}
         {' '}
-        <Text color="white">{highlightCodeLine(displayText, language)}</Text>
+        {line.highlighted
+          ? <Text>{displayText}</Text>
+          : <Text color="white">{displayText}</Text>}
       </Text>
     );
   }
@@ -230,17 +239,31 @@ function renderBlockContent(
   maxHeight: number,
 ): RenderedLine[] {
   const lines: RenderedLine[] = [];
+
+  // Pre-highlight the entire code block so the highlighter has full context.
+  // Falls back to plain text if highlighting fails (unknown language, etc).
+  let highlightedLines: string[] | null = null;
+  if (block.type === 'code') {
+    try {
+      const ansi = highlight(block.content, {
+        language: block.language,
+        ignoreIllegals: true,
+      });
+      highlightedLines = ansi.split('\n');
+    } catch {
+      // fallback to plain
+    }
+  }
+
   const sourceLines = block.content.split('\n');
 
   for (let i = 0; i < sourceLines.length; i++) {
     const raw = sourceLines[i] ?? '';
 
-    // If the line is wider than the display, we could wrap or truncate.
-    // For code, truncation is preferred (wrapping breaks indentation).
-    // We handle truncation at render time, so store the full line here.
     lines.push({
-      text: expandTabs(raw),
+      text: highlightedLines ? (highlightedLines[i] ?? expandTabs(raw)) : expandTabs(raw),
       lineNumber: block.type === 'code' || block.type === 'mermaid' ? i + 1 : undefined,
+      highlighted: highlightedLines != null,
     });
   }
 
@@ -264,25 +287,6 @@ function renderBlockContent(
   return lines;
 }
 
-// ─── Lightweight Syntax Highlighting ────────────────────────────────────────
-//
-// Rather than pulling in a full highlight.js dependency, we do simple
-// regex-based keyword highlighting that covers the common case for
-// agent-authored code (JS/TS/Python/Go/Rust).
-//
-// This returns a Text element tree, but since Ink doesn't support
-// nested Text with different colors in a straightforward way for
-// dynamically-generated content, we return a plain string here and
-// rely on the parent component's color prop for the base color.
-// A future enhancement could use chalk to produce ANSI-styled strings.
-
-function highlightCodeLine(line: string, language?: string): string {
-  // For now, return the line as-is. The green/white base color from the
-  // parent component provides sufficient visual distinction from prose.
-  // Full syntax highlighting can be layered in via cli-highlight integration.
-  return line;
-}
-
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
 function getTypeLabel(block: VisualBlock): string {
@@ -298,6 +302,34 @@ function getTypeLabel(block: VisualBlock): string {
     default:
       return '■ Block';
   }
+}
+
+const ANSI_RE = /\x1b\[[0-9;]*m/g;
+
+/** Truncate an ANSI-escaped string to `maxWidth` visible characters, preserving escape codes. */
+function truncateAnsi(text: string, maxWidth: number): string {
+  if (maxWidth <= 0) return '';
+  let visible = 0;
+  let i = 0;
+  let result = '';
+  while (i < text.length) {
+    // Check for ANSI escape sequence
+    if (text[i] === '\x1b' && text[i + 1] === '[') {
+      const end = text.indexOf('m', i + 2);
+      if (end !== -1) {
+        result += text.slice(i, end + 1);
+        i = end + 1;
+        continue;
+      }
+    }
+    if (visible >= maxWidth) break;
+    result += text[i];
+    visible++;
+    i++;
+  }
+  // Reset ANSI at end to avoid color bleed into gutter/next line
+  if (ANSI_RE.test(text)) result += '\x1b[0m';
+  return result;
 }
 
 function truncate(text: string, maxWidth: number): string {
