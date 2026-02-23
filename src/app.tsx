@@ -349,6 +349,7 @@ export const App: React.FC<AppProps> = ({
             height={mainHeight}
             currentFrame={rsvpState.currentFrame}
             context={context}
+            playing={rsvpState.playing}
           />
         )}
 

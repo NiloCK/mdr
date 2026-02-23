@@ -27,6 +27,8 @@ export interface TocSidebarProps {
   currentFrame: Frame | null;
   /** Surrounding words for context buffer below ORP word */
   context: { before: string[]; current: string; after: string[] };
+  /** Whether RSVP playback is active — hides context text to reduce noise */
+  playing: boolean;
   /** Empty lines above and below the RSVP word (default 1) */
   orpPadding?: number;
   /** Callback when a section is selected */
@@ -43,6 +45,7 @@ export const TocSidebar: React.FC<TocSidebarProps> = ({
   height,
   currentFrame,
   context,
+  playing,
   orpPadding = 1,
 }) => {
   const contentWidth = Math.max(1, width - 2);
@@ -123,7 +126,7 @@ export const TocSidebar: React.FC<TocSidebarProps> = ({
             {line.isActive && (
               <>
                 <ContextBuffer
-                  context={context}
+                  context={playing ? null : context}
                   width={contentWidth - 1}
                 />
                 <OrpBlock
@@ -229,26 +232,24 @@ const OrpBlock: React.FC<OrpBlockProps> = ({ frame, width, padding }) => {
 // anchor position for quick recovery glances.
 
 interface ContextBufferProps {
-  context: { before: string[]; current: string; after: string[] };
+  context: { before: string[]; current: string; after: string[] } | null;
   width: number;
 }
 
 const ContextBuffer: React.FC<ContextBufferProps> = ({ context, width }) => {
-  // Line 1: as many trailing before-words as fit, right-aligned feel via leading ellipsis
-  const line1 = buildTrailingLine(context.before, width);
-
-  // Line 2: current word + leading after-words that fit in remaining space
-  const afterStr = buildLeadingLine(context.after, width - context.current.length - 1);
+  // Always render exactly 2 lines + 1 padding row to hold layout stable.
+  // When context is null (playing), render blank lines to suppress noise.
+  const line1 = context ? buildTrailingLine(context.before, width) : '';
+  const current = context?.current ?? '';
+  const afterStr = context ? buildLeadingLine(context.after, width - current.length - 1) : '';
 
   return (
     <Box flexDirection="column" width={width} paddingTop={1}>
-      {/* Line 1: before context */}
       <Box width={width}>
         <Text dimColor>{line1.padEnd(width)}</Text>
       </Box>
-      {/* Line 2: current word anchored at left, after words trailing */}
       <Box width={width}>
-        <Text bold underline>{context.current}</Text>
+        {current ? <Text bold underline>{current}</Text> : <Text>{' '}</Text>}
         {afterStr ? <Text dimColor>{' ' + afterStr}</Text> : null}
       </Box>
     </Box>
