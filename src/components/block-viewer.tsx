@@ -8,6 +8,7 @@
 import React, { useMemo } from 'react';
 import { Box, Text } from 'ink';
 import { highlight } from 'cli-highlight';
+import { renderMermaidASCII } from 'beautiful-mermaid';
 import type { VisualBlock } from '../types.js';
 
 // ─── Props ──────────────────────────────────────────────────────────────────
@@ -240,9 +241,10 @@ function renderBlockContent(
 ): RenderedLine[] {
   const lines: RenderedLine[] = [];
 
-  // Pre-highlight the entire code block so the highlighter has full context.
-  // Falls back to plain text if highlighting fails (unknown language, etc).
+  // Pre-render the block content to ANSI lines where possible.
+  // Falls back to plain source on any error.
   let highlightedLines: string[] | null = null;
+
   if (block.type === 'code') {
     try {
       const ansi = highlight(block.content, {
@@ -253,16 +255,34 @@ function renderBlockContent(
     } catch {
       // fallback to plain
     }
+  } else if (block.type === 'mermaid') {
+    try {
+      const ansi = renderMermaidASCII(block.content, { colorMode: 'ansi256' });
+      highlightedLines = ansi.split('\n');
+    } catch {
+      // fallback to raw source
+    }
   }
 
   const sourceLines = block.content.split('\n');
 
-  for (let i = 0; i < sourceLines.length; i++) {
-    const raw = sourceLines[i] ?? '';
+  // For rendered mermaid, use the rendered lines directly (diagram replaces source).
+  // For code, zip source line numbers with highlighted lines.
+  const displayLines = (block.type === 'mermaid' && highlightedLines)
+    ? highlightedLines
+    : sourceLines;
+
+  for (let i = 0; i < displayLines.length; i++) {
+    const raw = displayLines[i] ?? '';
+    const isRenderedMermaid = block.type === 'mermaid' && highlightedLines != null;
 
     lines.push({
-      text: highlightedLines ? (highlightedLines[i] ?? expandTabs(raw)) : expandTabs(raw),
-      lineNumber: block.type === 'code' || block.type === 'mermaid' ? i + 1 : undefined,
+      text: block.type === 'code' && highlightedLines
+        ? (highlightedLines[i] ?? expandTabs(sourceLines[i] ?? ''))
+        : expandTabs(raw),
+      lineNumber: (block.type === 'code' || (block.type === 'mermaid' && !highlightedLines))
+        ? i + 1
+        : undefined,
       highlighted: highlightedLines != null,
     });
   }
