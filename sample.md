@@ -1,8 +1,8 @@
 # Agent-Driven Architecture Assessment
 
-This document demonstrates **rmdp** — a Rapid Serial Visual Presentation reader purpose-built for consuming structured, agent-authored technical documents at high speed.
+This document demonstrates **mdr** — a Markdown RSVP reader purpose-built for consuming structured, agent-authored technical documents at high speed.
 
-The key insight: most agent output follows predictable structural patterns. Headers delineate concerns. Code blocks provide implementation specifics. Diagrams map relationships. Prose connects the pieces. **rmdp** exploits this regularity to maximize human bandwidth.
+The key insight: most agent output follows predictable structural patterns. Headers delineate concerns. Code blocks provide implementation specifics. Diagrams map relationships. Prose connects the pieces. **mdr** exploits this regularity to maximize human bandwidth.
 
 ## Executive Summary
 
@@ -313,4 +313,4 @@ The multi-agent architecture provides a scalable, cost-effective approach to aut
 
 ---
 
-*This document was structured for consumption with rmdp. Headers delineate logical sections. Code blocks provide implementation reference. Diagrams map component relationships. Prose connects the narrative. Each section is self-contained enough for independent RSVP consumption while maintaining a coherent overall arc.*
+*This document was structured for consumption with mdr. Headers delineate logical sections. Code blocks provide implementation reference. Diagrams map component relationships. Prose connects the narrative. Each section is self-contained enough for independent RSVP consumption while maintaining a coherent overall arc.*
