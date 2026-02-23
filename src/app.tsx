@@ -14,7 +14,6 @@ import { useRsvp } from './hooks/use-rsvp.js';
 import { useDocument } from './hooks/use-document.js';
 
 import { TocSidebar } from './components/toc-sidebar.js';
-import { RsvpViewer } from './components/rsvp-viewer.js';
 import { BlockViewer } from './components/block-viewer.js';
 import { StatusBar, StatusBarCompact } from './components/status-bar.js';
 import { FullDocViewer, scrollOffsetForSection, totalDocLines } from './components/full-doc.js';
@@ -121,9 +120,8 @@ export const App: React.FC<AppProps> = ({
   const statusBarHeight = 1;
   const mainHeight = termHeight - statusBarHeight;
 
-  // RSVP mode layout: context strip is slim, block viewer gets the rest
-  const contextStripHeight = 3;
-  const blockViewerHeight = Math.max(4, mainHeight - contextStripHeight);
+  // RSVP mode layout: block viewer gets the full main pane
+  const blockViewerHeight = mainHeight;
 
   // ── Context for the RSVP viewer ────────────────────────────
   const context = useMemo(
@@ -350,40 +348,21 @@ export const App: React.FC<AppProps> = ({
             width={sidebarWidth}
             height={mainHeight}
             currentFrame={rsvpState.currentFrame}
+            context={context}
           />
         )}
 
         {/* ── Main pane ───────────────────────────────────── */}
         <Box flexDirection="column" width={mainWidth} height={mainHeight}>
           {mode === 'rsvp' ? (
-            <>
-              {/* Block viewer (main area) */}
-              <BlockViewer
-                block={docNav.activeVisualBlock}
-                totalBlocks={docNav.sectionVisualBlocks.length}
-                currentIndex={docNav.activeVisualBlockIndex}
-                pinned={docNav.pinned}
-                width={mainWidth}
-                height={blockViewerHeight}
-              />
-
-              {/* Context strip (slim bottom bar) */}
-              <Box
-                height={contextStripHeight}
-                borderStyle="single"
-                borderColor="gray"
-                alignItems="center"
-              >
-                <RsvpViewer
-                  frame={rsvpState.currentFrame}
-                  width={Math.max(10, mainWidth - 2)}
-                  height={contextStripHeight - 2}
-                  playing={rsvpState.playing}
-                  context={context}
-                  sectionTitle={sectionBreadcrumbStr}
-                />
-              </Box>
-            </>
+            <BlockViewer
+              block={docNav.activeVisualBlock}
+              totalBlocks={docNav.sectionVisualBlocks.length}
+              currentIndex={docNav.activeVisualBlockIndex}
+              pinned={docNav.pinned}
+              width={mainWidth}
+              height={blockViewerHeight}
+            />
           ) : (
             /* Full document view */
             <FullDocViewer
