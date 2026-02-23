@@ -125,6 +125,7 @@ export const BlockViewer: React.FC<BlockViewerProps> = ({
         flexGrow={1}
         paddingLeft={1}
         paddingRight={1}
+        paddingTop={1}
         overflow="hidden"
       >
         {renderedLines.map((line, i) => (
@@ -163,6 +164,7 @@ interface RenderedLine {
   isOverflowIndicator?: boolean;
   /** true when text already contains ANSI escape codes from cli-highlight */
   highlighted?: boolean;
+  tableRole?: 'header' | 'separator' | 'row';
 }
 
 const ContentLine: React.FC<ContentLineProps> = ({
@@ -220,7 +222,17 @@ const ContentLine: React.FC<ContentLineProps> = ({
     );
   }
 
-  // Table or other types
+  if (blockType === 'table') {
+    if (line.tableRole === 'header') {
+      return <Text bold color="cyan">{displayText}</Text>;
+    }
+    if (line.tableRole === 'separator') {
+      return <Text dimColor>{displayText}</Text>;
+    }
+    return <Text>{displayText}</Text>;
+  }
+
+  // Other types
   return (
     <Text>
       {gutterStr ? (
@@ -240,6 +252,18 @@ function renderBlockContent(
   maxHeight: number,
 ): RenderedLine[] {
   const lines: RenderedLine[] = [];
+
+  // Tables are pre-rendered at parse time; just annotate roles per line.
+  if (block.type === 'table') {
+    const rawLines = block.content.split('\n');
+    for (let i = 0; i < rawLines.length; i++) {
+      const text = expandTabs(rawLines[i] ?? '');
+      const role: RenderedLine['tableRole'] =
+        i === 0 ? 'header' : text.startsWith('─') ? 'separator' : 'row';
+      lines.push({ text, tableRole: role });
+    }
+    return applyOverflow(lines, maxHeight);
+  }
 
   // Pre-render the block content to ANSI lines where possible.
   // Falls back to plain source on any error.
@@ -287,24 +311,19 @@ function renderBlockContent(
     });
   }
 
-  // If there are more lines than fit vertically, truncate with an indicator
-  if (lines.length > maxHeight) {
-    const topHalf = Math.floor(maxHeight / 2) - 1;
-    const bottomStart = lines.length - (maxHeight - topHalf - 1);
-    const hidden = bottomStart - topHalf;
+  return applyOverflow(lines, maxHeight);
+}
 
-    const result: RenderedLine[] = [
-      ...lines.slice(0, topHalf),
-      {
-        text: `  ⋮ ${hidden} lines hidden ⋮`,
-        isOverflowIndicator: true,
-      },
-      ...lines.slice(bottomStart),
-    ];
-    return result;
-  }
-
-  return lines;
+function applyOverflow(lines: RenderedLine[], maxHeight: number): RenderedLine[] {
+  if (lines.length <= maxHeight) return lines;
+  const topHalf = Math.floor(maxHeight / 2) - 1;
+  const bottomStart = lines.length - (maxHeight - topHalf - 1);
+  const hidden = bottomStart - topHalf;
+  return [
+    ...lines.slice(0, topHalf),
+    { text: `  ⋮ ${hidden} lines hidden ⋮`, isOverflowIndicator: true },
+    ...lines.slice(bottomStart),
+  ];
 }
 
 // ─── Helpers ────────────────────────────────────────────────────────────────

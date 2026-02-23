@@ -617,8 +617,7 @@ class ParseContext {
         case 'table': {
           const t = token as Tokens.Table;
           const section = this.currentSection();
-          // Store the raw markdown for the table as a visual block
-          const block = this.addBlock('table', t.raw, undefined);
+          const block = this.addBlock('table', renderAsciiTable(t), undefined);
 
           // Read the header + rows into RSVP frames
           for (const headerCell of t.header) {
@@ -844,4 +843,44 @@ export function buildContext(
   }
 
   return { before, current: frame.word, after };
+}
+
+// ─── ASCII Table Renderer ────────────────────────────────────────────────────
+//
+// Converts a marked Tokens.Table into a column-aligned string.
+// Format (3 line types, detected by block-viewer for styling):
+//
+//   Line 0:   " Col1       │ Col2       │ Col3      "   ← header
+//   Line 1:   "────────────┼────────────┼───────────"   ← separator (starts with ─)
+//   Line 2+:  " val1       │ val2       │ val3      "   ← data rows
+
+function renderAsciiTable(t: Tokens.Table): string {
+  // Strip inline markdown from cell text
+  const cellText = (cell: { text: string }): string =>
+    cell.text.replace(/\*\*(.+?)\*\*/g, '$1').replace(/\*(.+?)\*/g, '$1').replace(/`(.+?)`/g, '$1').trim();
+
+  const headers = t.header.map(cellText);
+  const rows = t.rows.map((row) => row.map(cellText));
+
+  // Compute max width per column
+  const colWidths = headers.map((h, i) => {
+    let max = h.length;
+    for (const row of rows) {
+      const cell = row[i] ?? '';
+      if (cell.length > max) max = cell.length;
+    }
+    return max;
+  });
+
+  const renderRow = (cells: string[]): string =>
+    ' ' + colWidths.map((w, i) => (cells[i] ?? '').padEnd(w)).join(' │ ') + ' ';
+
+  const separator =
+    colWidths.map((w) => '─'.repeat(w + 2)).join('┼');
+
+  return [
+    renderRow(headers),
+    separator,
+    ...rows.map(renderRow),
+  ].join('\n');
 }
