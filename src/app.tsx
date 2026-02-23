@@ -96,20 +96,34 @@ export const App: React.FC<AppProps> = ({
     }
   }, [mode, docNav.activeSectionId]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // ── Section-boundary pause ─────────────────────────────────
+  // When the active section changes during playback, pause so the reader
+  // can orient in the ToC before continuing with spacebar.
+  const prevSectionIdRef = React.useRef(docNav.activeSectionId);
+  useEffect(() => {
+    if (
+      docNav.activeSectionId !== prevSectionIdRef.current &&
+      rsvpState.playing
+    ) {
+      rsvpControls.pause();
+    }
+    prevSectionIdRef.current = docNav.activeSectionId;
+  }, [docNav.activeSectionId]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // ── Layout calculations ────────────────────────────────────
   const sidebarWidth = useMemo(() => {
     if (!showSidebar) return 0;
     const maxW = Math.floor(termWidth * SIDEBAR_MAX_FRACTION);
-    return Math.max(SIDEBAR_MIN_WIDTH, Math.min(maxW, 36));
+    return Math.max(SIDEBAR_MIN_WIDTH, Math.min(maxW, 52));
   }, [showSidebar, termWidth]);
 
   const mainWidth = termWidth - sidebarWidth;
   const statusBarHeight = 1;
   const mainHeight = termHeight - statusBarHeight;
 
-  // RSVP mode layout: top half for word viewer, bottom half for block viewer
-  const rsvpViewerHeight = Math.max(8, Math.floor(mainHeight * 0.40));
-  const blockViewerHeight = Math.max(4, mainHeight - rsvpViewerHeight);
+  // RSVP mode layout: context strip is slim, block viewer gets the rest
+  const contextStripHeight = 3;
+  const blockViewerHeight = Math.max(4, mainHeight - contextStripHeight);
 
   // ── Context for the RSVP viewer ────────────────────────────
   const context = useMemo(
@@ -335,6 +349,7 @@ export const App: React.FC<AppProps> = ({
             activeSectionId={docNav.activeSectionId}
             width={sidebarWidth}
             height={mainHeight}
+            currentFrame={rsvpState.currentFrame}
           />
         )}
 
@@ -342,23 +357,7 @@ export const App: React.FC<AppProps> = ({
         <Box flexDirection="column" width={mainWidth} height={mainHeight}>
           {mode === 'rsvp' ? (
             <>
-              {/* RSVP viewer (top portion) */}
-              <Box
-                height={rsvpViewerHeight}
-                borderStyle="single"
-                borderColor="gray"
-              >
-                <RsvpViewer
-                  frame={rsvpState.currentFrame}
-                  width={Math.max(10, mainWidth - 2)}
-                  height={Math.max(4, rsvpViewerHeight - 2)}
-                  playing={rsvpState.playing}
-                  context={context}
-                  sectionTitle={sectionBreadcrumbStr}
-                />
-              </Box>
-
-              {/* Block viewer (bottom portion) */}
+              {/* Block viewer (main area) */}
               <BlockViewer
                 block={docNav.activeVisualBlock}
                 totalBlocks={docNav.sectionVisualBlocks.length}
@@ -367,6 +366,23 @@ export const App: React.FC<AppProps> = ({
                 width={mainWidth}
                 height={blockViewerHeight}
               />
+
+              {/* Context strip (slim bottom bar) */}
+              <Box
+                height={contextStripHeight}
+                borderStyle="single"
+                borderColor="gray"
+                alignItems="center"
+              >
+                <RsvpViewer
+                  frame={rsvpState.currentFrame}
+                  width={Math.max(10, mainWidth - 2)}
+                  height={contextStripHeight - 2}
+                  playing={rsvpState.playing}
+                  context={context}
+                  sectionTitle={sectionBreadcrumbStr}
+                />
+              </Box>
             </>
           ) : (
             /* Full document view */

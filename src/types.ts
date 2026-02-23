@@ -199,6 +199,6 @@ export const PAUSE = {
 } as const;
 
 /** Minimum sidebar width when visible */
-export const SIDEBAR_MIN_WIDTH = 24;
+export const SIDEBAR_MIN_WIDTH = 32;
 /** Maximum sidebar width (fraction of terminal) */
-export const SIDEBAR_MAX_FRACTION = 0.35;
+export const SIDEBAR_MAX_FRACTION = 0.45;
