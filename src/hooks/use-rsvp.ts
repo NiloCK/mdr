@@ -53,7 +53,11 @@ export function useRsvp(
   frames: Frame[],
   initialWpm: number = DEFAULT_WPM,
 ): [RsvpState, RsvpControls] {
-  const [frameIndex, setFrameIndex] = useState(0);
+  const [frameIndex, setFrameIndex] = useState(() => {
+    let i = 0;
+    while (i < frames.length - 1 && frames[i]?.heading) i++;
+    return i;
+  });
   const [wpm, setWpmRaw] = useState(initialWpm);
   const [playing, setPlaying] = useState(false);
 
@@ -91,16 +95,46 @@ export function useRsvp(
     const timer = setTimeout(() => {
       setFrameIndex((prev) => {
         if (prev >= framesRef.current.length - 1) {
-          // Reached the end — pause
           setPlaying(false);
           return prev;
         }
-        return prev + 1;
+        // Skip heading frames — ToC already surfaces section titles
+        const raw = prev + 1;
+        let next = raw;
+        while (next < framesRef.current.length - 1 && framesRef.current[next]?.heading) {
+          next++;
+        }
+        if (next >= framesRef.current.length) {
+          setPlaying(false);
+          return prev;
+        }
+        return next;
       });
     }, adjustedDelay);
 
     return () => clearTimeout(timer);
   }, [playing, frameIndex, wpm, frames]);
+
+  // ── Heading-skip helper ──────────────────────────────────
+  //
+  // Returns the first non-heading frame at or after `idx`.
+  // Heading text is surfaced by the ToC sidebar, so skipping it
+  // here avoids redundancy in the ORP display.
+
+  const skipHeadings = useCallback(
+    (idx: number, direction: 1 | -1 = 1): number => {
+      let i = idx;
+      while (
+        i >= 0 &&
+        i < framesRef.current.length &&
+        framesRef.current[i]?.heading
+      ) {
+        i += direction;
+      }
+      return Math.max(0, Math.min(i, framesRef.current.length - 1));
+    },
+    [],
+  );
 
   // ── Clamp helper ─────────────────────────────────────────
 
@@ -137,24 +171,24 @@ export function useRsvp(
   const stepForward = useCallback(
     (n: number = 1) => {
       setPlaying(false);
-      setFrameIndex((prev) => clampIndex(prev + n));
+      setFrameIndex((prev) => skipHeadings(clampIndex(prev + n), 1));
     },
-    [clampIndex],
+    [clampIndex, skipHeadings],
   );
 
   const stepBackward = useCallback(
     (n: number = 1) => {
       setPlaying(false);
-      setFrameIndex((prev) => clampIndex(prev - n));
+      setFrameIndex((prev) => skipHeadings(clampIndex(prev - n), -1));
     },
-    [clampIndex],
+    [clampIndex, skipHeadings],
   );
 
   const jumpTo = useCallback(
     (index: number) => {
-      setFrameIndex(clampIndex(index));
+      setFrameIndex(skipHeadings(clampIndex(index), 1));
     },
-    [clampIndex],
+    [clampIndex, skipHeadings],
   );
 
   const jumpToStart = useCallback(() => {

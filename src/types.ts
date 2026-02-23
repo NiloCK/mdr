@@ -179,7 +179,7 @@ export const KEY_BINDINGS: KeyBinding[] = [
 
 // ─── Constants ──────────────────────────────────────────────────────────────
 
-export const DEFAULT_WPM = 300;
+export const DEFAULT_WPM = 500;
 export const MIN_WPM = 50;
 export const MAX_WPM = 1500;
 export const WPM_STEP_SMALL = 25;
@@ -199,6 +199,6 @@ export const PAUSE = {
 } as const;
 
 /** Minimum sidebar width when visible */
-export const SIDEBAR_MIN_WIDTH = 24;
+export const SIDEBAR_MIN_WIDTH = 32;
 /** Maximum sidebar width (fraction of terminal) */
-export const SIDEBAR_MAX_FRACTION = 0.35;
+export const SIDEBAR_MAX_FRACTION = 0.45;

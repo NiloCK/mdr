@@ -14,7 +14,6 @@ import { useRsvp } from './hooks/use-rsvp.js';
 import { useDocument } from './hooks/use-document.js';
 
 import { TocSidebar } from './components/toc-sidebar.js';
-import { RsvpViewer } from './components/rsvp-viewer.js';
 import { BlockViewer } from './components/block-viewer.js';
 import { StatusBar, StatusBarCompact } from './components/status-bar.js';
 import { FullDocViewer, scrollOffsetForSection, totalDocLines } from './components/full-doc.js';
@@ -96,20 +95,33 @@ export const App: React.FC<AppProps> = ({
     }
   }, [mode, docNav.activeSectionId]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // ── Section-boundary pause ─────────────────────────────────
+  // When the active section changes during playback, pause so the reader
+  // can orient in the ToC before continuing with spacebar.
+  const prevSectionIdRef = React.useRef(docNav.activeSectionId);
+  useEffect(() => {
+    if (
+      docNav.activeSectionId !== prevSectionIdRef.current &&
+      rsvpState.playing
+    ) {
+      rsvpControls.pause();
+    }
+    prevSectionIdRef.current = docNav.activeSectionId;
+  }, [docNav.activeSectionId]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // ── Layout calculations ────────────────────────────────────
   const sidebarWidth = useMemo(() => {
     if (!showSidebar) return 0;
     const maxW = Math.floor(termWidth * SIDEBAR_MAX_FRACTION);
-    return Math.max(SIDEBAR_MIN_WIDTH, Math.min(maxW, 36));
+    return Math.max(SIDEBAR_MIN_WIDTH, Math.min(maxW, 52));
   }, [showSidebar, termWidth]);
 
   const mainWidth = termWidth - sidebarWidth;
   const statusBarHeight = 1;
   const mainHeight = termHeight - statusBarHeight;
 
-  // RSVP mode layout: top half for word viewer, bottom half for block viewer
-  const rsvpViewerHeight = Math.max(8, Math.floor(mainHeight * 0.40));
-  const blockViewerHeight = Math.max(4, mainHeight - rsvpViewerHeight);
+  // RSVP mode layout: block viewer gets the full main pane
+  const blockViewerHeight = mainHeight;
 
   // ── Context for the RSVP viewer ────────────────────────────
   const context = useMemo(
@@ -335,39 +347,23 @@ export const App: React.FC<AppProps> = ({
             activeSectionId={docNav.activeSectionId}
             width={sidebarWidth}
             height={mainHeight}
+            currentFrame={rsvpState.currentFrame}
+            context={context}
+            playing={rsvpState.playing}
           />
         )}
 
         {/* ── Main pane ───────────────────────────────────── */}
         <Box flexDirection="column" width={mainWidth} height={mainHeight}>
           {mode === 'rsvp' ? (
-            <>
-              {/* RSVP viewer (top portion) */}
-              <Box
-                height={rsvpViewerHeight}
-                borderStyle="single"
-                borderColor="gray"
-              >
-                <RsvpViewer
-                  frame={rsvpState.currentFrame}
-                  width={Math.max(10, mainWidth - 2)}
-                  height={Math.max(4, rsvpViewerHeight - 2)}
-                  playing={rsvpState.playing}
-                  context={context}
-                  sectionTitle={sectionBreadcrumbStr}
-                />
-              </Box>
-
-              {/* Block viewer (bottom portion) */}
-              <BlockViewer
-                block={docNav.activeVisualBlock}
-                totalBlocks={docNav.sectionVisualBlocks.length}
-                currentIndex={docNav.activeVisualBlockIndex}
-                pinned={docNav.pinned}
-                width={mainWidth}
-                height={blockViewerHeight}
-              />
-            </>
+            <BlockViewer
+              block={docNav.activeVisualBlock}
+              totalBlocks={docNav.sectionVisualBlocks.length}
+              currentIndex={docNav.activeVisualBlockIndex}
+              pinned={docNav.pinned}
+              width={mainWidth}
+              height={blockViewerHeight}
+            />
           ) : (
             /* Full document view */
             <FullDocViewer

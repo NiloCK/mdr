@@ -1,46 +1,19 @@
-# rmdp — Rapid Markdown Presentation
+# mdr — Markdown RSVP
 
-A TUI speed-reader for structured, agent-authored technical documents. Displays one word at a time using [Rapid Serial Visual Presentation (RSVP)](https://en.wikipedia.org/wiki/Rapid_serial_visual_presentation) with a persistent table-of-contents sidebar and a split-pane viewer for code blocks and diagrams.
+A TUI speed-reader for structured, agent-authored technical documents. Displays one word at a time using [Rapid Serial Visual Presentation (RSVP)](https://en.wikipedia.org/wiki/Rapid_serial_visual_presentation) with the table-of-contents as the primary reading surface and a split-pane viewer for code blocks and diagrams.
 
 Built for the workflow: **agent writes long-form analysis → human consumes it fast.**
-
-```
-┌─ ◊ Contents ──────────┬─────────────────────────────────────────────────┐
-│                        │                                                 │
-│ ▾ System Architecture  │           § System Architecture › WorkGraph     │
-│   ▸ Overview           │                                                 │
-│   ▸ The WorkGraph ◀    │                        ▼                        │
-│   Agent Lifecycle      │              Work·Graph                         │
-│ Discovery Agent        │                        ▲                        │
-│   ⋯ (3 more)          │                                                 │
-│ Assessment Agent       │   ...the central WorkGraph data structure...    │
-│ Synthesis Agent        │                        ▶                        │
-│                        ├─────────────────────────────────────────────────┤
-│ ░░░░░░░░░░░░░░░░░░░░░ │ ╭─ ◆ Code [typescript] (1/3) ● ○ ○ ──────────╮│
-│  16%                   │ │  1 │ interface WorkGraph {                   ││
-│                        │ │  2 │   nodes: Map<string, WorkNode>;        ││
-│                        │ │  3 │   edges: Array<[string, string]>;      ││
-│                        │ │  4 │   addNode(node: WorkNode): void;       ││
-│                        │ │  5 │   query(filter: Filter): WorkNode[];   ││
-│                        │ │  6 │ }                                      ││
-│                        │ │                                              ││
-│                        │ │ n/p: nav blocks  │  x: pin                   ││
-│                        │ ╰──────────────────────────────────────────────╯│
-├────────────────────────┴─────────────────────────────────────────────────┤
-│ ▶ │ RSVP │ 350 wpm │ The WorkGraph │ 145/892 │ ██████░░░░  16% │ 2:08  │
-└──────────────────────────────────────────────────────────────────────────┘
-```
 
 ## Features
 
 - **RSVP word-by-word playback** with Optimal Recognition Point (ORP) highlighting — the focal letter of each word is pinned to a fixed column and rendered in red so your eye never moves
 - **Smart pacing** — automatic pause scaling on sentence endings (2×), commas (1.4×), paragraph breaks (2.5×), headings (1.8×), inline code (1.4×), and long words (1.15–1.3×)
 - **Markdown-aware formatting** in the RSVP stream — **bold**, *italic*, and `‹inline code›` each get distinct visual treatment
-- **Table of Contents sidebar** — collapsible, auto-scrolling, highlights the active section and its ancestors
-- **Code block viewer** — split pane that renders the current section's code blocks with line numbers, language labels, and tab-style navigation between multiple blocks
-- **Mermaid diagram support** — mermaid fenced blocks are detected and displayed in the block viewer (ASCII rendering via optional `beautiful-mermaid` integration)
-- **Context line** — shows surrounding words below the RSVP display so you can orient within the sentence
-- **Section breadcrumb** — displays the full path (`§ Architecture › WorkGraph`) above the RSVP word
+- **ToC as reading surface** — the ORP word and context buffer live inside the table of contents sidebar, minimizing eye movement between navigation and reading
+- **Section-boundary pause** — playback auto-pauses at each new section; press Space to continue
+- **Context buffer** — two fixed lines of surrounding text (hidden during playback, visible when paused) for quick recovery after tripping
+- **Code block viewer** — split pane that renders the current section's code blocks with syntax highlighting, line numbers, language labels, and tab-style navigation between multiple blocks
+- **Mermaid diagram support** — mermaid fenced blocks are rendered as ASCII art in the block viewer
 - **Full document view** — press `Tab` to toggle between RSVP and a scrollable rendered markdown view with active-section highlighting
 - **Block pinning** — press `x` to pin a code block on screen so it stays visible as you RSVP through the surrounding prose
 - **Vim-style navigation** — `j`/`k` for sections, `g`/`G` for start/end, `d`/`u` for half-page scroll in document mode
@@ -50,37 +23,38 @@ Built for the workflow: **agent writes long-form analysis → human consumes it 
 ## Quick Start
 
 ```sh
-# Clone and install
-cd rmdp
-npm install
+npm install -g @nilock/mdr
 
-# Run with the included sample document
-npm run demo
-
-# Run with any markdown file
-npx tsx src/index.tsx path/to/document.md
+mdr path/to/document.md
 
 # With options
-npx tsx src/index.tsx design-doc.md --wpm 400 --play
+mdr design-doc.md --wpm 400 --play
 
 # Pipe from stdin
-cat README.md | npx tsx src/index.tsx
+cat README.md | mdr
+```
+
+### Run from source
+
+```sh
+npm install
+npm run demo                        # included sample document
+npx tsx src/index.tsx document.md
 ```
 
 ### Requirements
 
 - **Node.js** ≥ 18 (tested on 22.x)
-- **npm** or **yarn**
 
 No build step needed — `tsx` runs TypeScript directly.
 
 ## Usage
 
 ```
-rmdp <file.md> [options]
+mdr <file.md> [options]
 
 Options:
-  -w, --wpm <n>     Initial words-per-minute (default: 300)
+  -w, --wpm <n>     Initial words-per-minute (default: 500)
   -p, --play        Start RSVP playback immediately
   -h, --help        Show help message
   -v, --version     Show version
@@ -126,7 +100,7 @@ Options:
 | `?` | Help overlay |
 | `q` | Quit |
 
-### Document View (when in full-doc mode)
+### Document View
 
 | Key | Action |
 |-----|--------|
@@ -148,9 +122,8 @@ src/
 │   ├── use-rsvp.ts        RSVP engine — self-correcting timer, play/pause, speed
 │   └── use-document.ts    Document navigation — section/block traversal, sync
 └── components/
-    ├── rsvp-viewer.tsx    The word flasher — ORP alignment, reticle, context line
-    ├── toc-sidebar.tsx    Collapsible table of contents with progress bar
-    ├── block-viewer.tsx   Code/diagram block display with navigation tabs
+    ├── toc-sidebar.tsx    ToC with inline ORP word, context buffer, and collapsing tree
+    ├── block-viewer.tsx   Code/diagram block display with syntax highlighting and tabs
     ├── status-bar.tsx     Bottom bar — WPM, progress, section, time remaining
     ├── full-doc.tsx       Scrollable rendered markdown view
     └── help-overlay.tsx   Keyboard shortcut reference modal
@@ -180,7 +153,7 @@ The Optimal Recognition Point is calculated per-word based on length (after stri
 
 The ORP letter is rendered in bold red at a fixed column. All words are padded so this column never moves — your fovea stays stationary.
 
-## Writing Documents for rmdp
+## Writing Documents for mdr
 
 See [`AGENT_WRITING_GUIDE.md`](./AGENT_WRITING_GUIDE.md) for comprehensive guidelines on structuring documents for optimal RSVP consumption. Key points:
 
@@ -203,14 +176,9 @@ The guide also includes document templates for assessment reports, design docume
 | [react](https://react.dev) | Component model (required by Ink) |
 | [marked](https://github.com/markedjs/marked) | Markdown lexer — extracts AST for section/block/inline parsing |
 | [chalk](https://github.com/chalk/chalk) | Terminal string styling |
-| [cli-highlight](https://github.com/felixfbecker/cli-highlight) | Syntax highlighting for code blocks (planned integration) |
+| [cli-highlight](https://github.com/felixfbecker/cli-highlight) | Syntax highlighting for code blocks |
+| [beautiful-mermaid](https://github.com/lukilabs/beautiful-mermaid) | Terminal-native mermaid diagram rendering |
 | [tsx](https://github.com/privatenumber/tsx) | TypeScript execution without build step |
-
-### Optional
-
-| Package | Purpose |
-|---------|---------|
-| [beautiful-mermaid](https://github.com/lukilabs/beautiful-mermaid) | Terminal-native mermaid diagram rendering (ASCII output) |
 
 ## Performance Notes
 
