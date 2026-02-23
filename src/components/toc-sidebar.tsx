@@ -21,8 +21,6 @@ export interface TocSidebarProps {
   width: number;
   /** Available height in rows */
   height: number;
-  /** Progress through the document (0–1) */
-  progress: number;
   /** Callback when a section is selected */
   onSelectSection?: (sectionId: number) => void;
 }
@@ -35,7 +33,6 @@ export const TocSidebar: React.FC<TocSidebarProps> = ({
   activeSectionId,
   width,
   height,
-  progress,
 }) => {
   // Build a list of lines to render, respecting collapsing rules.
   // Active section and its ancestors/siblings are expanded.
@@ -88,7 +85,7 @@ export const TocSidebar: React.FC<TocSidebarProps> = ({
   // If there are more lines than available height, we need to scroll
   // so the active section is visible.
   const visibleLines = useMemo(() => {
-    const availableRows = Math.max(1, height - 3); // reserve for header + progress
+    const availableRows = Math.max(1, height - 2); // reserve for header
     if (lines.length <= availableRows) {
       return lines;
     }
@@ -111,12 +108,6 @@ export const TocSidebar: React.FC<TocSidebarProps> = ({
 
     return lines.slice(start, end);
   }, [lines, height]);
-
-  // ── Progress bar ──────────────────────────────────────────
-  const progressBarWidth = Math.max(0, width - 4);
-  const filledWidth = Math.round(progress * progressBarWidth);
-  const emptyWidth = progressBarWidth - filledWidth;
-  const progressBar = '█'.repeat(filledWidth) + '░'.repeat(emptyWidth);
 
   // ── Render ────────────────────────────────────────────────
   const contentWidth = Math.max(1, width - 2);
@@ -146,17 +137,6 @@ export const TocSidebar: React.FC<TocSidebarProps> = ({
         ))}
       </Box>
 
-      {/* Progress bar */}
-      <Box paddingLeft={1} paddingRight={1}>
-        <Text dimColor>
-          {truncate(progressBar, contentWidth - 1)}
-        </Text>
-      </Box>
-      <Box paddingLeft={1} paddingRight={1}>
-        <Text dimColor>
-          {Math.round(progress * 100).toString().padStart(3)}%
-        </Text>
-      </Box>
     </Box>
   );
 };

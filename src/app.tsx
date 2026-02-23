@@ -335,7 +335,6 @@ export const App: React.FC<AppProps> = ({
             activeSectionId={docNav.activeSectionId}
             width={sidebarWidth}
             height={mainHeight}
-            progress={rsvpState.progress}
           />
         )}
 
