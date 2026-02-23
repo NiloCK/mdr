@@ -179,7 +179,7 @@ export const KEY_BINDINGS: KeyBinding[] = [
 
 // ─── Constants ──────────────────────────────────────────────────────────────
 
-export const DEFAULT_WPM = 300;
+export const DEFAULT_WPM = 500;
 export const MIN_WPM = 50;
 export const MAX_WPM = 1500;
 export const WPM_STEP_SMALL = 25;
