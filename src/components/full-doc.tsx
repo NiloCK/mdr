@@ -10,16 +10,18 @@
 //   - Current section highlighted in the text
 //   - Code blocks rendered inline with border decoration
 
-import React, { useMemo } from 'react';
+import React, { useMemo, useEffect, useRef } from 'react';
 import { Box, Text } from 'ink';
-import type { Document, Section } from '../types.js';
+import { highlight } from 'cli-highlight';
+import { renderMermaidASCII } from 'beautiful-mermaid';
+import type { Document, Section, Frame, Block } from '../types.js';
 
 // ─── Props ──────────────────────────────────────────────────────────────────
 
 export interface FullDocViewerProps {
   /** The parsed document */
   doc: Document;
-  /** Current scroll offset (line number, 0-based) */
+  /** Current scroll offset (line number, 0-based). If autoScroll is true, this is ignored/overridden. */
   scrollOffset: number;
   /** Available width in columns */
   width: number;
@@ -29,6 +31,12 @@ export interface FullDocViewerProps {
   activeSectionId: number;
   /** All flat sections for lookup */
   flatSections: Section[];
+  /** Current RSVP frame index */
+  currentFrameIndex?: number;
+  /** Whether to use enriched rendering (syntax highlighting, mermaid) */
+  enriched?: boolean;
+  /** Whether to auto-scroll to keep the current frame visible */
+  autoScroll?: boolean;
 }
 
 // ─── Rendered Line Types ────────────────────────────────────────────────────
@@ -37,10 +45,19 @@ interface DocLine {
   text: string;
   type: 'heading' | 'prose' | 'code' | 'code-border' | 'list' | 'blockquote' | 'hr' | 'blank' | 'table';
   sectionId: number;
+  blockId: number;
   headingDepth?: number;
   language?: string;
   lineNumber?: number;
   indent?: number;
+  /** Range of frame indices covered by this line (inclusive) */
+  frameStart?: number;
+  /** Range of frame indices covered by this line (inclusive) */
+  frameEnd?: number;
+  /** Individual frames in this line (for precise highlighting) */
+  frames?: Frame[];
+  /** true when text contains ANSI escape codes */
+  highlighted?: boolean;
 }
 
 // ─── Component ──────────────────────────────────────────────────────────────
@@ -51,23 +68,68 @@ export const FullDocViewer: React.FC<FullDocViewerProps> = ({
   width,
   height,
   activeSectionId,
-  flatSections,
+  currentFrameIndex = -1,
+  enriched = true,
+  autoScroll = false,
 }) => {
   const contentWidth = Math.max(10, width - 2);
-  const viewportHeight = Math.max(1, height - 2); // account for scroll indicators
+  const viewportHeight = Math.max(1, height - 2);
 
   // ── Build all rendered lines from the document ─────────────
   const allLines = useMemo(
-    () => buildDocLines(doc, contentWidth),
-    [doc, contentWidth],
+    () => buildDocLines(doc, contentWidth, enriched),
+    [doc, contentWidth, enriched],
   );
+
+  // ── Find the line containing the current frame ─────────────
+  const currentLineIndex = useMemo(() => {
+    if (currentFrameIndex < 0) return -1;
+    return allLines.findIndex(
+      (l) =>
+        l.frameStart !== undefined &&
+        l.frameEnd !== undefined &&
+        currentFrameIndex >= l.frameStart &&
+        currentFrameIndex <= l.frameEnd
+    );
+  }, [allLines, currentFrameIndex]);
+
+  // ── Auto-scroll logic ──────────────────────────────────────
+  const [internalScrollOffset, setInternalScrollOffset] = React.useState(0);
+
+  // Sync internal offset to prop if not auto-scrolling
+  useEffect(() => {
+    if (!autoScroll) {
+      setInternalScrollOffset(scrollOffset);
+    }
+  }, [scrollOffset, autoScroll]);
+
+  // Auto-scroll to keep currentLineIndex in view
+  useEffect(() => {
+    if (autoScroll && currentLineIndex >= 0) {
+      setInternalScrollOffset((prev) => {
+        // If current line is above viewport
+        if (currentLineIndex < prev) {
+          return currentLineIndex;
+        }
+        // If current line is below viewport
+        if (currentLineIndex >= prev + viewportHeight) {
+          return Math.max(0, currentLineIndex - Math.floor(viewportHeight / 2));
+        }
+        return prev;
+      });
+    }
+  }, [currentLineIndex, autoScroll, viewportHeight]);
 
   // ── Clamp scroll offset ────────────────────────────────────
   const maxScroll = Math.max(0, allLines.length - viewportHeight);
-  const clampedOffset = Math.max(0, Math.min(scrollOffset, maxScroll));
+  const clampedOffset = Math.max(0, Math.min(internalScrollOffset, maxScroll));
 
   // ── Visible window ─────────────────────────────────────────
   const visibleLines = allLines.slice(clampedOffset, clampedOffset + viewportHeight);
+
+  // ── Current word / block info ──────────────────────────────
+  const currentFrame = currentFrameIndex >= 0 ? doc.frames[currentFrameIndex] : null;
+  const currentBlockId = currentFrame?.blockId ?? -1;
 
   // ── Scroll position indicator ──────────────────────────────
   const scrollPct = allLines.length > viewportHeight
@@ -95,6 +157,9 @@ export const FullDocViewer: React.FC<FullDocViewerProps> = ({
               line={line}
               maxWidth={showScrollbar ? contentWidth - 2 : contentWidth}
               activeSectionId={activeSectionId}
+              currentBlockId={currentBlockId}
+              currentFrameIndex={currentFrameIndex}
+              currentFrame={currentFrame}
             />
           ))}
           {/* Fill remaining space if fewer lines than viewport */}
@@ -134,14 +199,76 @@ const DocLineComponent: React.FC<{
   line: DocLine;
   maxWidth: number;
   activeSectionId: number;
-}> = ({ line, maxWidth, activeSectionId }) => {
+  currentBlockId: number;
+  currentFrameIndex: number;
+  currentFrame: Frame | null;
+}> = ({
+  line,
+  maxWidth,
+  activeSectionId,
+  currentBlockId,
+  currentFrameIndex,
+  currentFrame,
+}) => {
   const isActiveSection = line.sectionId === activeSectionId;
+  const isCurrentBlock = line.blockId === currentBlockId;
+  const isCurrentLine =
+    isCurrentBlock &&
+    currentFrameIndex >= 0 &&
+    line.frameStart !== undefined &&
+    line.frameEnd !== undefined &&
+    currentFrameIndex >= line.frameStart &&
+    currentFrameIndex <= line.frameEnd;
 
-  // Left margin indicator for active section
-  const marginChar = isActiveSection ? '▐' : ' ';
-  const marginColor = isActiveSection ? 'yellow' : undefined;
+  // Left margin indicator:
+  // - Current block: double line
+  // - Current line: solid block
+  // - Active section: single line
+  let marginChar = ' ';
+  let marginColor: string | undefined = undefined;
 
-  const displayText = truncate(line.text, Math.max(1, maxWidth - 2));
+  if (isCurrentLine) {
+    marginChar = '█';
+    marginColor = 'yellow';
+  } else if (isCurrentBlock) {
+    marginChar = '┃';
+    marginColor = 'yellow';
+  } else if (isActiveSection) {
+    marginChar = '│';
+    marginColor = 'gray';
+  }
+
+  const displayText = line.highlighted
+    ? truncateAnsi(line.text, Math.max(1, maxWidth - 2))
+    : truncate(line.text, Math.max(1, maxWidth - 2));
+
+  // Word highlighting for prose
+  const renderTextWithWordHighlight = (l: DocLine) => {
+    if (!isCurrentLine || !currentFrame || !l.frames) {
+      return <Text dimColor={!isActiveSection}>{l.text}</Text>;
+    }
+
+    return (
+      <Text>
+        {l.frames.map((f, i) => {
+          const isCurrentWord = f.index === currentFrameIndex;
+          return (
+            <React.Fragment key={f.index}>
+              {i > 0 && <Text>{' '}</Text>}
+              <Text
+                bold={isCurrentWord}
+                underline={isCurrentWord}
+                color={isCurrentWord ? 'yellow' : undefined}
+                dimColor={!isCurrentWord && !isActiveSection}
+              >
+                {f.word}
+              </Text>
+            </React.Fragment>
+          );
+        })}
+      </Text>
+    );
+  };
 
   switch (line.type) {
     case 'heading': {
@@ -154,10 +281,12 @@ const DocLineComponent: React.FC<{
         6: 'white',
       };
       const color = headingColors[line.headingDepth ?? 1] ?? 'cyan';
+      const isCurrentHeading = isCurrentLine;
+      
       return (
         <Text>
           <Text color={marginColor}>{marginChar}</Text>
-          <Text bold color={color}>
+          <Text bold color={isCurrentHeading ? 'yellow' : color} underline={isCurrentHeading}>
             {displayText}
           </Text>
         </Text>
@@ -165,12 +294,13 @@ const DocLineComponent: React.FC<{
     }
 
     case 'code': {
+      const isHighlightedCode = isCurrentBlock;
       return (
         <Text>
           <Text color={marginColor}>{marginChar}</Text>
-          <Text color="green">
+          <Text color={isHighlightedCode ? 'white' : 'green'}>
             {line.lineNumber != null ? (
-              <Text dimColor>
+              <Text dimColor={!isHighlightedCode} color={isHighlightedCode ? 'gray' : undefined}>
                 {String(line.lineNumber).padStart(3)} │{' '}
               </Text>
             ) : null}
@@ -184,7 +314,7 @@ const DocLineComponent: React.FC<{
       return (
         <Text>
           <Text color={marginColor}>{marginChar}</Text>
-          <Text color="green" dimColor>
+          <Text color="green" dimColor={!isCurrentBlock}>
             {displayText}
           </Text>
         </Text>
@@ -195,7 +325,7 @@ const DocLineComponent: React.FC<{
       return (
         <Text>
           <Text color={marginColor}>{marginChar}</Text>
-          <Text color="gray" italic>
+          <Text color="gray" italic dimColor={!isCurrentBlock}>
             {displayText}
           </Text>
         </Text>
@@ -206,7 +336,7 @@ const DocLineComponent: React.FC<{
       return (
         <Text>
           <Text color={marginColor}>{marginChar}</Text>
-          <Text>
+          <Text dimColor={!isCurrentBlock}>
             {displayText}
           </Text>
         </Text>
@@ -236,7 +366,7 @@ const DocLineComponent: React.FC<{
       return (
         <Text>
           <Text color={marginColor}>{marginChar}</Text>
-          <Text color="blue">
+          <Text color="blue" dimColor={!isCurrentBlock}>
             {displayText}
           </Text>
         </Text>
@@ -248,12 +378,7 @@ const DocLineComponent: React.FC<{
       return (
         <Text>
           <Text color={marginColor}>{marginChar}</Text>
-          <Text
-            bold={isActiveSection ? false : false}
-            dimColor={!isActiveSection}
-          >
-            {displayText}
-          </Text>
+          {renderTextWithWordHighlight(line)}
         </Text>
       );
     }
@@ -265,47 +390,48 @@ const DocLineComponent: React.FC<{
 // Walks the raw markdown source using the parsed section structure and
 // produces an array of DocLine objects ready for rendering.
 
-function buildDocLines(doc: Document, maxWidth: number): DocLine[] {
+function buildDocLines(doc: Document, maxWidth: number, enriched: boolean): DocLine[] {
   const lines: DocLine[] = [];
-  let currentSectionId = doc.flatSections.length > 0 ? doc.flatSections[0]!.id : 0;
 
-  // Re-parse with marked.lexer to get the token stream
-  // (we already have it in the parser, but we keep this self-contained)
-  let sectionIndex = 0;
-
-  // Walk blocks from the parsed document model
   for (const block of doc.blocks) {
-    currentSectionId = block.sectionId;
+    const currentSectionId = block.sectionId;
+    const currentBlockId = block.id;
 
     switch (block.type) {
       case 'heading': {
-        // Determine heading depth from section info
         const section = doc.flatSections.find((s) => s.id === block.sectionId);
         const depth = section?.level ?? 1;
         const prefix = '#'.repeat(depth) + ' ';
 
-        lines.push({ text: '', type: 'blank', sectionId: currentSectionId });
+        lines.push({ text: '', type: 'blank', sectionId: currentSectionId, blockId: currentBlockId });
         lines.push({
           text: prefix + block.content,
           type: 'heading',
           sectionId: currentSectionId,
+          blockId: currentBlockId,
           headingDepth: depth,
+          frameStart: block.frameStart,
+          frameEnd: block.frameEnd,
         });
-        lines.push({ text: '', type: 'blank', sectionId: currentSectionId });
+        lines.push({ text: '', type: 'blank', sectionId: currentSectionId, blockId: currentBlockId });
         break;
       }
 
       case 'prose': {
-        // Word-wrap prose content
-        const wrapped = wordWrap(block.content, Math.max(10, maxWidth - 4));
-        for (const wl of wrapped) {
+        const blockFrames = doc.frames.slice(block.frameStart, block.frameEnd + 1);
+        const wrapResult = wrapFrames(blockFrames, Math.max(10, maxWidth - 4));
+        for (const wr of wrapResult) {
           lines.push({
-            text: wl,
+            text: wr.text,
             type: 'prose',
             sectionId: currentSectionId,
+            blockId: currentBlockId,
+            frameStart: wr.frameStart,
+            frameEnd: wr.frameEnd,
+            frames: wr.frames,
           });
         }
-        lines.push({ text: '', type: 'blank', sectionId: currentSectionId });
+        lines.push({ text: '', type: 'blank', sectionId: currentSectionId, blockId: currentBlockId });
         break;
       }
 
@@ -321,18 +447,48 @@ function buildDocLines(doc: Document, maxWidth: number): DocLine[] {
           text: topBorder,
           type: 'code-border',
           sectionId: currentSectionId,
+          blockId: currentBlockId,
           language: block.language,
         });
 
-        const codeLines = block.content.split('\n');
-        for (let i = 0; i < codeLines.length; i++) {
-          const codeLine = expandTabs(codeLines[i] ?? '');
+        let displayLines: string[] = [];
+        let highlighted = false;
+
+        if (enriched) {
+          if (block.type === 'code') {
+            try {
+              const ansi = highlight(block.content, {
+                language: block.language,
+                ignoreIllegals: true,
+              });
+              displayLines = ansi.split('\n');
+              highlighted = true;
+            } catch {
+              displayLines = block.content.split('\n');
+            }
+          } else if (block.type === 'mermaid') {
+            try {
+              const ansi = renderMermaidASCII(block.content, { colorMode: 'ansi256' });
+              displayLines = ansi.split('\n');
+              highlighted = true;
+            } catch {
+              displayLines = block.content.split('\n');
+            }
+          }
+        } else {
+          displayLines = block.content.split('\n');
+        }
+
+        for (let i = 0; i < displayLines.length; i++) {
+          const codeLine = displayLines[i] ?? '';
           lines.push({
-            text: codeLine,
+            text: highlighted ? codeLine : expandTabs(codeLine),
             type: 'code',
             sectionId: currentSectionId,
+            blockId: currentBlockId,
             language: block.language,
             lineNumber: i + 1,
+            highlighted,
           });
         }
 
@@ -340,91 +496,110 @@ function buildDocLines(doc: Document, maxWidth: number): DocLine[] {
           text: bottomBorder,
           type: 'code-border',
           sectionId: currentSectionId,
+          blockId: currentBlockId,
         });
-        lines.push({ text: '', type: 'blank', sectionId: currentSectionId });
+        lines.push({ text: '', type: 'blank', sectionId: currentSectionId, blockId: currentBlockId });
         break;
       }
 
-      case 'list': {
-        // Simple rendering: split raw content into lines
-        const listLines = block.content.split('\n').filter((l) => l.trim().length > 0);
-        for (const ll of listLines) {
-          const trimmed = ll.trim();
-          // Detect bullet vs ordered
-          const bullet = /^\d+[.)]/.test(trimmed)
-            ? trimmed
-            : trimmed.replace(/^[-*+]\s*/, '  • ');
-          const wrapped = wordWrap(bullet, Math.max(10, maxWidth - 6));
-          for (let i = 0; i < wrapped.length; i++) {
-            lines.push({
-              text: (i === 0 ? '' : '    ') + wrapped[i]!,
-              type: 'list',
-              sectionId: currentSectionId,
-            });
-          }
-        }
-        lines.push({ text: '', type: 'blank', sectionId: currentSectionId });
-        break;
-      }
-
-      case 'blockquote': {
-        const bqLines = block.content.split('\n');
-        for (const bql of bqLines) {
-          const wrapped = wordWrap(bql.trim(), Math.max(10, maxWidth - 8));
-          for (const wl of wrapped) {
-            lines.push({
-              text: '  │ ' + wl,
-              type: 'blockquote',
-              sectionId: currentSectionId,
-            });
-          }
-        }
-        lines.push({ text: '', type: 'blank', sectionId: currentSectionId });
-        break;
-      }
-
-      case 'table': {
-        const tableLines = block.content.split('\n');
-        for (const tl of tableLines) {
+      case 'list':
+      case 'blockquote':
+      case 'table':
+      case 'hr':
+      default: {
+        // Simplified rendering for other types, similar to prose but without frame tracking for now
+        // except where they actually generate frames (blockquote, table)
+        const content = block.content || '';
+        const wrapped = wordWrap(content, Math.max(10, maxWidth - 4));
+        for (const wl of wrapped) {
           lines.push({
-            text: tl,
-            type: 'table',
+            text: wl,
+            type: block.type === 'hr' ? 'hr' : 'prose',
             sectionId: currentSectionId,
+            blockId: currentBlockId,
+            frameStart: block.frameStart !== -1 ? block.frameStart : undefined,
+            frameEnd: block.frameEnd !== -1 ? block.frameEnd : undefined,
           });
         }
-        lines.push({ text: '', type: 'blank', sectionId: currentSectionId });
-        break;
-      }
-
-      case 'hr': {
-        lines.push({
-          text: '─'.repeat(Math.min(maxWidth - 4, 62)),
-          type: 'hr',
-          sectionId: currentSectionId,
-        });
-        lines.push({ text: '', type: 'blank', sectionId: currentSectionId });
-        break;
-      }
-
-      default: {
-        // Fallback: render raw content as prose
-        if (block.content.trim()) {
-          const wrapped = wordWrap(block.content, Math.max(10, maxWidth - 4));
-          for (const wl of wrapped) {
-            lines.push({
-              text: wl,
-              type: 'prose',
-              sectionId: currentSectionId,
-            });
-          }
-          lines.push({ text: '', type: 'blank', sectionId: currentSectionId });
-        }
+        lines.push({ text: '', type: 'blank', sectionId: currentSectionId, blockId: currentBlockId });
         break;
       }
     }
   }
 
   return lines;
+}
+
+// ─── Helpers ────────────────────────────────────────────────────────────────
+
+interface WrappedLine {
+  text: string;
+  frameStart: number;
+  frameEnd: number;
+  frames: Frame[];
+}
+
+function wrapFrames(frames: Frame[], maxWidth: number): WrappedLine[] {
+  if (frames.length === 0) return [];
+  
+  const lines: WrappedLine[] = [];
+  let currentFrames: Frame[] = [];
+  let currentLineLength = 0;
+
+  for (const frame of frames) {
+    const word = frame.word;
+    if (currentFrames.length > 0 && currentLineLength + 1 + word.length > maxWidth) {
+      lines.push({
+        text: currentFrames.map(f => f.word).join(' '),
+        frameStart: currentFrames[0]!.index,
+        frameEnd: currentFrames[currentFrames.length - 1]!.index,
+        frames: [...currentFrames],
+      });
+      currentFrames = [frame];
+      currentLineLength = word.length;
+    } else {
+      currentFrames.push(frame);
+      currentLineLength += (currentFrames.length === 1 ? 0 : 1) + word.length;
+    }
+  }
+
+  if (currentFrames.length > 0) {
+    lines.push({
+      text: currentFrames.map(f => f.word).join(' '),
+      frameStart: currentFrames[0]!.index,
+      frameEnd: currentFrames[currentFrames.length - 1]!.index,
+      frames: [...currentFrames],
+    });
+  }
+
+  return lines;
+}
+
+const ANSI_RE = /\x1b\[[0-9;]*m/g;
+
+/** Truncate an ANSI-escaped string to `maxWidth` visible characters, preserving escape codes. */
+function truncateAnsi(text: string, maxWidth: number): string {
+  if (maxWidth <= 0) return '';
+  let visible = 0;
+  let i = 0;
+  let result = '';
+  while (i < text.length) {
+    // Check for ANSI escape sequence
+    if (text[i] === '\x1b' && text[i + 1] === '[') {
+      const end = text.indexOf('m', i + 2);
+      if (end !== -1) {
+        result += text.slice(i, end + 1);
+        i = end + 1;
+        continue;
+      }
+    }
+    if (visible >= maxWidth) break;
+    result += text[i];
+    visible++;
+    i++;
+  }
+  if (ANSI_RE.test(text)) result += '\x1b[0m';
+  return result;
 }
 
 // ─── Utility: Find scroll offset for a given section ────────────────────────
@@ -438,25 +613,20 @@ export function scrollOffsetForSection(
   doc: Document,
   sectionId: number,
   contentWidth: number,
+  enriched: boolean = false,
 ): number {
-  const allLines = buildDocLines(doc, contentWidth);
+  const allLines = buildDocLines(doc, contentWidth, enriched);
   for (let i = 0; i < allLines.length; i++) {
     const line = allLines[i]!;
     if (line.type === 'heading' && line.sectionId === sectionId) {
-      // Go one line before the heading (the blank line) so the heading
-      // appears near the top, not clipped
       return Math.max(0, i - 1);
     }
   }
   return 0;
 }
 
-/**
- * Total number of rendered lines for the document.
- * Used by the parent to clamp scroll offset.
- */
-export function totalDocLines(doc: Document, contentWidth: number): number {
-  return buildDocLines(doc, contentWidth).length;
+export function totalDocLines(doc: Document, contentWidth: number, enriched: boolean = false): number {
+  return buildDocLines(doc, contentWidth, enriched).length;
 }
 
 // ─── Helpers ────────────────────────────────────────────────────────────────

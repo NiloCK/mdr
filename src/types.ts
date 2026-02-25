@@ -170,7 +170,8 @@ export const KEY_BINDINGS: KeyBinding[] = [
   { key: 'End / G',     description: 'Jump to end',                      category: 'navigation' },
 
   // View
-  { key: 'Tab',         description: 'Toggle RSVP / Document view',      category: 'view' },
+  { key: 'Tab',         description: 'Toggle Enriched / Raw rendering',  category: 'view' },
+  { key: 'Enter',       description: 'Toggle RSVP / Document mode',      category: 'view' },
   { key: 's',           description: 'Toggle sidebar',                   category: 'view' },
   { key: 'x',           description: 'Pin / unpin visual block',         category: 'view' },
   { key: '?',           description: 'Toggle help overlay',              category: 'view' },

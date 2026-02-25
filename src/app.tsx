@@ -14,7 +14,6 @@ import { useRsvp } from './hooks/use-rsvp.js';
 import { useDocument } from './hooks/use-document.js';
 
 import { TocSidebar } from './components/toc-sidebar.js';
-import { BlockViewer } from './components/block-viewer.js';
 import { StatusBar, StatusBarCompact } from './components/status-bar.js';
 import { FullDocViewer, scrollOffsetForSection, totalDocLines } from './components/full-doc.js';
 import { HelpOverlay } from './components/help-overlay.js';
@@ -64,6 +63,7 @@ export const App: React.FC<AppProps> = ({
   const [mode, setMode] = useState<ViewMode>('rsvp');
   const [showHelp, setShowHelp] = useState(false);
   const [showSidebar, setShowSidebar] = useState(true);
+  const [enriched, setEnriched] = useState(true);
 
   // ── RSVP engine ────────────────────────────────────────────
   const [rsvpState, rsvpControls] = useRsvp(doc.frames, initialWpm);
@@ -90,10 +90,10 @@ export const App: React.FC<AppProps> = ({
   useEffect(() => {
     if (mode === 'document') {
       const contentWidth = Math.max(10, mainWidth - 2);
-      const offset = scrollOffsetForSection(doc, docNav.activeSectionId, contentWidth);
+      const offset = scrollOffsetForSection(doc, docNav.activeSectionId, contentWidth, enriched);
       setDocScrollOffset(offset);
     }
-  }, [mode, docNav.activeSectionId]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [mode, docNav.activeSectionId, enriched]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Section-boundary pause ─────────────────────────────────
   // When the active section changes during playback, pause so the reader
@@ -119,9 +119,6 @@ export const App: React.FC<AppProps> = ({
   const mainWidth = termWidth - sidebarWidth;
   const statusBarHeight = 1;
   const mainHeight = termHeight - statusBarHeight;
-
-  // RSVP mode layout: block viewer gets the full main pane
-  const blockViewerHeight = mainHeight;
 
   // ── Context for the RSVP viewer ────────────────────────────
   const context = useMemo(
@@ -161,9 +158,9 @@ export const App: React.FC<AppProps> = ({
       return;
     }
 
-    // ── Tab: toggle view mode ────────────────────────────────
+    // ── Tab: toggle enriched rendering ───────────────────────
     if (key.tab) {
-      setMode((m) => (m === 'rsvp' ? 'document' : 'rsvp'));
+      setEnriched((v) => !v);
       return;
     }
 
@@ -173,10 +170,16 @@ export const App: React.FC<AppProps> = ({
       return;
     }
 
+    // ── Mode toggle (Enter) ──────────────────────────────────
+    if (key.return) {
+      setMode((m) => (m === 'rsvp' ? 'document' : 'rsvp'));
+      return;
+    }
+
     // ── Document mode: scroll controls ───────────────────────
     if (mode === 'document') {
       const contentWidth = Math.max(10, mainWidth - 2);
-      const maxLines = totalDocLines(doc, contentWidth);
+      const maxLines = totalDocLines(doc, contentWidth, enriched);
       const viewportH = mainHeight - 2;
 
       if (key.downArrow || input === 'j') {
@@ -203,7 +206,7 @@ export const App: React.FC<AppProps> = ({
       }
       if (input === 'G') {
         const contentW = Math.max(10, mainWidth - 2);
-        const total = totalDocLines(doc, contentW);
+        const total = totalDocLines(doc, contentW, enriched);
         setDocScrollOffset(Math.max(0, total - viewportH));
         return;
       }
@@ -355,26 +358,17 @@ export const App: React.FC<AppProps> = ({
 
         {/* ── Main pane ───────────────────────────────────── */}
         <Box flexDirection="column" width={mainWidth} height={mainHeight}>
-          {mode === 'rsvp' ? (
-            <BlockViewer
-              block={docNav.activeVisualBlock}
-              totalBlocks={docNav.sectionVisualBlocks.length}
-              currentIndex={docNav.activeVisualBlockIndex}
-              pinned={docNav.pinned}
-              width={mainWidth}
-              height={blockViewerHeight}
-            />
-          ) : (
-            /* Full document view */
-            <FullDocViewer
-              doc={doc}
-              scrollOffset={docScrollOffset}
-              width={mainWidth}
-              height={mainHeight}
-              activeSectionId={docNav.activeSectionId}
-              flatSections={doc.flatSections}
-            />
-          )}
+          <FullDocViewer
+            doc={doc}
+            scrollOffset={docScrollOffset}
+            width={mainWidth}
+            height={mainHeight}
+            activeSectionId={docNav.activeSectionId}
+            flatSections={doc.flatSections}
+            currentFrameIndex={rsvpState.frameIndex}
+            enriched={enriched}
+            autoScroll={mode === 'rsvp'}
+          />
         </Box>
       </Box>
 
