@@ -276,22 +276,6 @@ export const App: React.FC<AppProps> = ({
       rsvpControls.jumpToEnd();
       return;
     }
-
-    // Visual block navigation
-    if (input === 'n') {
-      docNavControls.nextVisualBlock();
-      return;
-    }
-    if (input === 'p') {
-      docNavControls.prevVisualBlock();
-      return;
-    }
-
-    // Pin visual block
-    if (input === 'x') {
-      docNavControls.togglePin();
-      return;
-    }
   });
 
   // ── Render ─────────────────────────────────────────────────
@@ -351,8 +335,6 @@ export const App: React.FC<AppProps> = ({
             width={sidebarWidth}
             height={mainHeight}
             currentFrame={rsvpState.currentFrame}
-            context={context}
-            playing={rsvpState.playing}
           />
         )}
 
@@ -368,6 +350,7 @@ export const App: React.FC<AppProps> = ({
             currentFrameIndex={rsvpState.frameIndex}
             enriched={enriched}
             autoScroll={mode === 'rsvp'}
+            playing={rsvpState.playing}
           />
         </Box>
       </Box>
@@ -383,7 +366,6 @@ export const App: React.FC<AppProps> = ({
           timeRemainingSeconds={rsvpState.timeRemainingSeconds}
           sectionTitle={sectionTitle}
           mode={mode}
-          pinned={docNav.pinned}
           width={termWidth}
         />
       ) : (
@@ -396,7 +378,6 @@ export const App: React.FC<AppProps> = ({
           timeRemainingSeconds={rsvpState.timeRemainingSeconds}
           sectionTitle={sectionTitle}
           mode={mode}
-          pinned={docNav.pinned}
           width={termWidth}
         />
       )}

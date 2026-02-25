@@ -25,10 +25,6 @@ export interface TocSidebarProps {
   height: number;
   /** Current RSVP frame (for inline word display) */
   currentFrame: Frame | null;
-  /** Surrounding words for context buffer below ORP word */
-  context: { before: string[]; current: string; after: string[] };
-  /** Whether RSVP playback is active — hides context text to reduce noise */
-  playing: boolean;
   /** Empty lines above and below the RSVP word (default 1) */
   orpPadding?: number;
   /** Callback when a section is selected */
@@ -44,15 +40,13 @@ export const TocSidebar: React.FC<TocSidebarProps> = ({
   width,
   height,
   currentFrame,
-  context,
-  playing,
   orpPadding = 1,
 }) => {
   const contentWidth = Math.max(1, width - 2);
 
   // How many rows the RSVP insert occupies (fixed):
-  //   1 (padding above context) + 2 (context lines) + orpPadding + 3 (reticle+word+reticle) + orpPadding
-  const orpBlockHeight = 1 + 2 + orpPadding * 2 + 3;
+  //   orpPadding + 3 (reticle+word+reticle) + orpPadding
+  const orpBlockHeight = orpPadding * 2 + 3;
 
   // Build a list of lines to render, respecting collapsing rules.
   const lines = useMemo(() => {
@@ -124,17 +118,11 @@ export const TocSidebar: React.FC<TocSidebarProps> = ({
           <React.Fragment key={i}>
             <TocLineComponent line={line} maxWidth={contentWidth - 1} />
             {line.isActive && (
-              <>
-                <ContextBuffer
-                  context={playing ? null : context}
-                  width={contentWidth - 1}
-                />
-                <OrpBlock
-                  frame={currentFrame}
-                  width={contentWidth - 1}
-                  padding={orpPadding}
-                />
-              </>
+              <OrpBlock
+                frame={currentFrame}
+                width={contentWidth - 1}
+                padding={orpPadding}
+              />
             )}
           </React.Fragment>
         ))}
@@ -220,73 +208,6 @@ const OrpBlock: React.FC<OrpBlockProps> = ({ frame, width, padding }) => {
     </>
   );
 };
-
-// ─── Context Buffer ──────────────────────────────────────────────────────────
-//
-// Fixed 2-line context display — no wrapping jitter.
-//
-//   Line 1 (dim):   …trailing before-words that fit
-//   Line 2:         [current word underlined] trailing after-words that fit
-//
-// The current word is always the first token on line 2, giving it a stable
-// anchor position for quick recovery glances.
-
-interface ContextBufferProps {
-  context: { before: string[]; current: string; after: string[] } | null;
-  width: number;
-}
-
-const ContextBuffer: React.FC<ContextBufferProps> = ({ context, width }) => {
-  // Always render exactly 2 lines + 1 padding row to hold layout stable.
-  // When context is null (playing), render blank lines to suppress noise.
-  const line1 = context ? buildTrailingLine(context.before, width) : '';
-  const current = context?.current ?? '';
-  const afterStr = context ? buildLeadingLine(context.after, width - current.length - 1) : '';
-
-  return (
-    <Box flexDirection="column" width={width} paddingTop={1}>
-      <Box width={width}>
-        <Text dimColor>{line1.padEnd(width)}</Text>
-      </Box>
-      <Box width={width}>
-        {current ? <Text bold underline>{current}</Text> : <Text>{' '}</Text>}
-        {afterStr ? <Text dimColor>{' ' + afterStr}</Text> : null}
-      </Box>
-    </Box>
-  );
-};
-
-/** Build a string of trailing words from `words` that fits within `maxWidth`.
- *  Prepends '…' if words were trimmed. */
-function buildTrailingLine(words: string[], maxWidth: number): string {
-  if (words.length === 0) return '';
-  const joined = words.join(' ');
-  if (joined.length <= maxWidth) return joined;
-  // Take as many words from the end as fit (with leading ellipsis)
-  const budget = maxWidth - 1; // reserve 1 for '…'
-  let result = '';
-  for (let i = words.length - 1; i >= 0; i--) {
-    const candidate = words.slice(i).join(' ');
-    if (candidate.length <= budget) {
-      result = candidate;
-    } else {
-      break;
-    }
-  }
-  return result ? '…' + result : ('…' + joined.slice(joined.length - budget));
-}
-
-/** Build a string of leading words from `words` that fits within `maxWidth`. */
-function buildLeadingLine(words: string[], maxWidth: number): string {
-  if (words.length === 0 || maxWidth <= 0) return '';
-  let result = '';
-  for (const word of words) {
-    const next = result ? result + ' ' + word : word;
-    if (next.length > maxWidth) break;
-    result = next;
-  }
-  return result;
-}
 
 // ─── ToC Line Sub-component ──────────────────────────────────────────────────
 

@@ -127,10 +127,6 @@ export interface AppState {
   // ─── Navigation state ────────────────────
   /** Currently active section id */
   activeSectionId: number;
-  /** Currently displayed visual block index (within the active section's visual blocks) */
-  activeVisualBlockIndex: number;
-  /** Whether a visual block is "pinned" (stays on screen regardless of RSVP position) */
-  visualBlockPinned: boolean;
 
   // ─── UI state ────────────────────────────
   /** Whether the help overlay is visible */
@@ -164,42 +160,40 @@ export const KEY_BINDINGS: KeyBinding[] = [
   // Navigation
   { key: '↑ / k',       description: 'Previous section',                 category: 'navigation' },
   { key: '↓ / j',       description: 'Next section',                     category: 'navigation' },
-  { key: 'n',           description: 'Next visual block in section',     category: 'navigation' },
-  { key: 'p',           description: 'Previous visual block in section', category: 'navigation' },
   { key: 'Home / g',    description: 'Jump to beginning',                category: 'navigation' },
   { key: 'End / G',     description: 'Jump to end',                      category: 'navigation' },
 
-  // View
-  { key: 'Tab',         description: 'Toggle Enriched / Raw rendering',  category: 'view' },
-  { key: 'Enter',       description: 'Toggle RSVP / Document mode',      category: 'view' },
-  { key: 's',           description: 'Toggle sidebar',                   category: 'view' },
-  { key: 'x',           description: 'Pin / unpin visual block',         category: 'view' },
-  { key: '?',           description: 'Toggle help overlay',              category: 'view' },
-  { key: 'q / Ctrl+C',  description: 'Quit',                             category: 'view' },
-];
-
-// ─── Constants ──────────────────────────────────────────────────────────────
-
-export const DEFAULT_WPM = 500;
-export const MIN_WPM = 50;
-export const MAX_WPM = 1500;
-export const WPM_STEP_SMALL = 25;
-export const WPM_STEP_LARGE = 100;
-
-/** Pause multipliers for smart pacing */
-export const PAUSE = {
-  NORMAL: 1.0,
-  COMMA: 1.4,
-  SEMICOLON: 1.5,
-  SENTENCE_END: 2.0,
-  PARAGRAPH_END: 2.5,
-  HEADING: 1.8,
-  LONG_WORD: 1.15,        // words > 8 chars
-  VERY_LONG_WORD: 1.3,    // words > 12 chars
-  INLINE_CODE: 1.4,
-} as const;
-
-/** Minimum sidebar width when visible */
-export const SIDEBAR_MIN_WIDTH = 32;
-/** Maximum sidebar width (fraction of terminal) */
-export const SIDEBAR_MAX_FRACTION = 0.45;
+    // View
+    { key: 'Tab',         description: 'Toggle Enriched / Raw rendering',  category: 'view' },
+    { key: 'Enter',       description: 'Toggle RSVP / Document mode',      category: 'view' },
+    { key: 's',           description: 'Toggle sidebar',                   category: 'view' },
+    { key: '?',           description: 'Toggle help overlay',              category: 'view' },
+    { key: 'q / Ctrl+C',  description: 'Quit',                             category: 'view' },
+  ];
+  
+  // ─── Constants ──────────────────────────────────────────────────────────────
+  
+  export const DEFAULT_WPM = 500;
+  export const MIN_WPM = 50;
+  export const MAX_WPM = 1500;
+  export const WPM_STEP_SMALL = 25;
+  export const WPM_STEP_LARGE = 100;
+  
+  /** Pause multipliers for smart pacing */
+  export const PAUSE = {
+    NORMAL: 1.0,
+    COMMA: 1.4,
+    SEMICOLON: 1.5,
+    SENTENCE_END: 2.0,
+    PARAGRAPH_END: 2.5,
+    HEADING: 1.8,
+    LONG_WORD: 1.15,        // words > 8 chars
+    VERY_LONG_WORD: 1.3,    // words > 12 chars
+    INLINE_CODE: 1.4,
+  } as const;
+  
+  /** Minimum sidebar width when visible */
+  export const SIDEBAR_MIN_WIDTH = 32;
+  /** Maximum sidebar width (fraction of terminal) */
+  export const SIDEBAR_MAX_FRACTION = 0.45;
+  

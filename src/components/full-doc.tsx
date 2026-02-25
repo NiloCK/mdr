@@ -37,6 +37,8 @@ export interface FullDocViewerProps {
   enriched?: boolean;
   /** Whether to auto-scroll to keep the current frame visible */
   autoScroll?: boolean;
+  /** Whether RSVP playback is active */
+  playing?: boolean;
 }
 
 // ─── Rendered Line Types ────────────────────────────────────────────────────
@@ -71,6 +73,7 @@ export const FullDocViewer: React.FC<FullDocViewerProps> = ({
   currentFrameIndex = -1,
   enriched = true,
   autoScroll = false,
+  playing = false,
 }) => {
   const contentWidth = Math.max(10, width - 2);
   const viewportHeight = Math.max(1, height - 2);
@@ -160,6 +163,7 @@ export const FullDocViewer: React.FC<FullDocViewerProps> = ({
               currentBlockId={currentBlockId}
               currentFrameIndex={currentFrameIndex}
               currentFrame={currentFrame}
+              playing={playing}
             />
           ))}
           {/* Fill remaining space if fewer lines than viewport */}
@@ -202,6 +206,7 @@ const DocLineComponent: React.FC<{
   currentBlockId: number;
   currentFrameIndex: number;
   currentFrame: Frame | null;
+  playing: boolean;
 }> = ({
   line,
   maxWidth,
@@ -209,6 +214,7 @@ const DocLineComponent: React.FC<{
   currentBlockId,
   currentFrameIndex,
   currentFrame,
+  playing,
 }) => {
   const isActiveSection = line.sectionId === activeSectionId;
   const isCurrentBlock = line.blockId === currentBlockId;
@@ -227,7 +233,7 @@ const DocLineComponent: React.FC<{
   let marginChar = ' ';
   let marginColor: string | undefined = undefined;
 
-  if (isCurrentLine) {
+  if (isCurrentLine && !playing) {
     marginChar = '█';
     marginColor = 'yellow';
   } else if (isCurrentBlock) {
@@ -244,7 +250,7 @@ const DocLineComponent: React.FC<{
 
   // Word highlighting for prose
   const renderTextWithWordHighlight = (l: DocLine) => {
-    if (!isCurrentLine || !currentFrame || !l.frames) {
+    if (!isCurrentLine || !currentFrame || !l.frames || playing) {
       return <Text dimColor={!isActiveSection}>{l.text}</Text>;
     }
 

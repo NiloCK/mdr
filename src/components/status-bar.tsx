@@ -27,8 +27,6 @@ export interface StatusBarProps {
   sectionTitle: string;
   /** Current view mode */
   mode: ViewMode;
-  /** Whether a visual block is pinned */
-  pinned: boolean;
   /** Available width in columns */
   width: number;
 }
@@ -44,7 +42,6 @@ export const StatusBar: React.FC<StatusBarProps> = ({
   timeRemainingSeconds,
   sectionTitle,
   mode,
-  pinned,
   width,
 }) => {
   // ── Build status segments ──────────────────────────────────
@@ -69,9 +66,6 @@ export const StatusBar: React.FC<StatusBarProps> = ({
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   }, [timeRemainingSeconds]);
 
-  // Pin indicator
-  const pinStr = pinned ? ' 📌' : '';
-
   // Section name (truncated to fit)
   const fixedPartsWidth =
     playIndicator.length + 1 +      // "▶ "
@@ -79,7 +73,6 @@ export const StatusBar: React.FC<StatusBarProps> = ({
     wpmStr.length + 3 +              // "300 wpm │ "
     posStr.length + 3 +              // "42/892 │ "
     timeStr.length + 3 +             // "2:15 │ "
-    pinStr.length +
     20;                              // progress bar min + padding
 
   const sectionMaxWidth = Math.max(5, width - fixedPartsWidth);
@@ -95,10 +88,9 @@ export const StatusBar: React.FC<StatusBarProps> = ({
       sectionStr.length + 3 +
       posStr.length + 3 +
       timeStr.length +
-      pinStr.length +
       6; // separators and padding
     return Math.max(8, width - usedWidth);
-  }, [width, playIndicator, modeLabel, wpmStr, sectionStr, posStr, timeStr, pinStr]);
+  }, [width, playIndicator, modeLabel, wpmStr, sectionStr, posStr, timeStr]);
 
   const filledWidth = Math.round(progress * progressBarWidth);
   const emptyWidth = Math.max(0, progressBarWidth - filledWidth);
@@ -134,7 +126,6 @@ export const StatusBar: React.FC<StatusBarProps> = ({
         <Text color="yellow">
           {sectionStr}
         </Text>
-        {pinStr ? <Text>{pinStr}</Text> : null}
         <Text dimColor> │ </Text>
 
         {/* Word position */}
