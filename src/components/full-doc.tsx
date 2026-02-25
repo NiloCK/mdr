@@ -18,10 +18,10 @@ import type { Document, Section, Frame, Block } from '../types.js';
 
 // ─── Props ──────────────────────────────────────────────────────────────────
 
-export interface FullDocViewerProps {
+interface FullDocViewerProps {
   /** The parsed document */
   doc: Document;
-  /** Current scroll offset (line number, 0-based). If autoScroll is true, this is ignored/overridden. */
+  /** Current scroll offset (line number, 0-based). Always honoured — sets internalScrollOffset when changed. */
   scrollOffset: number;
   /** Available width in columns */
   width: number;
@@ -39,6 +39,8 @@ export interface FullDocViewerProps {
   autoScroll?: boolean;
   /** Whether RSVP playback is active */
   playing?: boolean;
+  /** Called whenever the effective (clamped) scroll offset changes, so the parent can stay in sync */
+  onScrollChange?: (offset: number) => void;
 }
 
 // ─── Rendered Line Types ────────────────────────────────────────────────────
@@ -74,6 +76,7 @@ export const FullDocViewer: React.FC<FullDocViewerProps> = ({
   enriched = true,
   autoScroll = false,
   playing = false,
+  onScrollChange,
 }) => {
   const contentWidth = Math.max(10, width - 2);
   const viewportHeight = Math.max(1, height - 2);
@@ -100,12 +103,12 @@ export const FullDocViewer: React.FC<FullDocViewerProps> = ({
   const [internalScrollOffset, setInternalScrollOffset] = React.useState(0);
   const lastAutoFrameRef = useRef(currentFrameIndex);
 
-  // Sync internal offset to prop if not auto-scrolling
+  // Always sync internal offset when the external prop changes.
+  // This lets manual scroll keys (PgUp/PgDn, Ctrl+Arrows) work even
+  // while autoScroll is true (RSVP mode, paused).
   useEffect(() => {
-    if (!autoScroll) {
-      setInternalScrollOffset(scrollOffset);
-    }
-  }, [scrollOffset, autoScroll]);
+    setInternalScrollOffset(scrollOffset);
+  }, [scrollOffset]);
 
   // Auto-scroll to keep currentLineIndex in view
   useEffect(() => {
@@ -136,6 +139,13 @@ export const FullDocViewer: React.FC<FullDocViewerProps> = ({
   // ── Clamp scroll offset ────────────────────────────────────
   const maxScroll = Math.max(0, allLines.length - viewportHeight);
   const clampedOffset = Math.max(0, Math.min(internalScrollOffset, maxScroll));
+
+  // ── Report scroll changes back to parent ───────────────────
+  // Keeps app.tsx's docScrollOffset in sync so that relative scroll
+  // operations (PgUp/PgDn etc.) start from the correct base value.
+  useEffect(() => {
+    onScrollChange?.(clampedOffset);
+  }, [clampedOffset, onScrollChange]);
 
   // ── Visible window ─────────────────────────────────────────
   const visibleLines = allLines.slice(clampedOffset, clampedOffset + viewportHeight);

@@ -81,6 +81,13 @@ export const App: React.FC<AppProps> = ({
   // ── Full-doc scroll state ──────────────────────────────────
   const [docScrollOffset, setDocScrollOffset] = useState(0);
 
+  // Keep docScrollOffset in sync when FullDocViewer auto-scrolls internally,
+  // so that relative scroll operations (PgUp/PgDn, Ctrl+Arrows) use the
+  // correct base value rather than a stale one.
+  const handleScrollChange = useCallback((offset: number) => {
+    setDocScrollOffset(offset);
+  }, []);
+
   // ── Sync document navigation to RSVP position ─────────────
   useEffect(() => {
     docNavControls.syncToFrame(rsvpState.frameIndex);
@@ -370,6 +377,7 @@ export const App: React.FC<AppProps> = ({
             enriched={enriched}
             autoScroll={mode === 'rsvp'}
             playing={rsvpState.playing}
+            onScrollChange={handleScrollChange}
           />
         </Box>
       </Box>
