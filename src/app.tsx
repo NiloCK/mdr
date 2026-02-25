@@ -176,47 +176,66 @@ export const App: React.FC<AppProps> = ({
       return;
     }
 
-    // ── Document mode: scroll controls ───────────────────────
-    if (mode === 'document') {
+    // ── Global scrolling controls (when paused or in doc mode) ───────
+    if (mode === 'document' || (mode === 'rsvp' && !rsvpState.playing)) {
       const contentWidth = Math.max(10, mainWidth - 2);
       const maxLines = totalDocLines(doc, contentWidth, enriched);
       const viewportH = mainHeight - 2;
 
-      if (key.downArrow || input === 'j') {
-        setDocScrollOffset((o) => Math.min(o + 1, Math.max(0, maxLines - viewportH)));
+      const scrollDown = (dist: number) => {
+        setDocScrollOffset((o) => Math.min(o + dist, Math.max(0, maxLines - viewportH)));
+      };
+      const scrollUp = (dist: number) => {
+        setDocScrollOffset((o) => Math.max(o - dist, 0));
+      };
+
+      // Explicit scrolling keys (Ctrl+Arrows, PgUp/Dn, vim-ish)
+      if (key.pageDown || input === 'd') {
+        scrollDown(Math.floor(viewportH / 2));
         return;
       }
-      if (key.upArrow || input === 'k') {
-        setDocScrollOffset((o) => Math.max(o - 1, 0));
+      if (key.pageUp || input === 'u') {
+        scrollUp(Math.floor(viewportH / 2));
         return;
       }
-      // Page down / page up with d/u (vim-style half-page)
-      if (input === 'd') {
-        setDocScrollOffset((o) => Math.min(o + Math.floor(viewportH / 2), Math.max(0, maxLines - viewportH)));
+      if (key.ctrl && key.downArrow) {
+        scrollDown(3);
         return;
       }
-      if (input === 'u') {
-        setDocScrollOffset((o) => Math.max(o - Math.floor(viewportH / 2), 0));
+      if (key.ctrl && key.upArrow) {
+        scrollUp(3);
         return;
       }
-      // g/G for top/bottom
-      if (input === 'g') {
-        setDocScrollOffset(0);
+
+      // In pure DOCUMENT mode, standard arrows scroll
+      if (mode === 'document') {
+        if (key.downArrow || input === 'j') {
+          scrollDown(1);
+          return;
+        }
+        if (key.upArrow || input === 'k') {
+          scrollUp(1);
+          return;
+        }
+        // g/G for top/bottom
+        if (input === 'g') {
+          setDocScrollOffset(0);
+          return;
+        }
+        if (input === 'G') {
+          const contentW = Math.max(10, mainWidth - 2);
+          const total = totalDocLines(doc, contentW, enriched);
+          setDocScrollOffset(Math.max(0, total - viewportH));
+          return;
+        }
+        // Space switches back to RSVP
+        if (input === ' ') {
+          setMode('rsvp');
+          rsvpControls.togglePlay();
+          return;
+        }
         return;
       }
-      if (input === 'G') {
-        const contentW = Math.max(10, mainWidth - 2);
-        const total = totalDocLines(doc, contentW, enriched);
-        setDocScrollOffset(Math.max(0, total - viewportH));
-        return;
-      }
-      // Space still toggles play (and switches back to RSVP mode)
-      if (input === ' ') {
-        setMode('rsvp');
-        rsvpControls.togglePlay();
-        return;
-      }
-      return;
     }
 
     // ── RSVP mode keybindings ────────────────────────────────

@@ -160,6 +160,9 @@ export const KEY_BINDINGS: KeyBinding[] = [
   // Navigation
   { key: '↑ / k',       description: 'Previous section',                 category: 'navigation' },
   { key: '↓ / j',       description: 'Next section',                     category: 'navigation' },
+  { key: 'PgUp / u',    description: 'Scroll up 1/2 page',               category: 'navigation' },
+  { key: 'PgDn / d',    description: 'Scroll down 1/2 page',             category: 'navigation' },
+  { key: 'Ctrl+↑/↓',    description: 'Scroll document 3 lines',          category: 'navigation' },
   { key: 'Home / g',    description: 'Jump to beginning',                category: 'navigation' },
   { key: 'End / G',     description: 'Jump to end',                      category: 'navigation' },
 

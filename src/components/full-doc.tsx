@@ -98,6 +98,7 @@ export const FullDocViewer: React.FC<FullDocViewerProps> = ({
 
   // ── Auto-scroll logic ──────────────────────────────────────
   const [internalScrollOffset, setInternalScrollOffset] = React.useState(0);
+  const lastAutoFrameRef = useRef(currentFrameIndex);
 
   // Sync internal offset to prop if not auto-scrolling
   useEffect(() => {
@@ -109,19 +110,28 @@ export const FullDocViewer: React.FC<FullDocViewerProps> = ({
   // Auto-scroll to keep currentLineIndex in view
   useEffect(() => {
     if (autoScroll && currentLineIndex >= 0) {
+      // Only force auto-scroll if the frame has actually moved,
+      // allowing manual scrolling to persist while paused on a word.
+      const frameMoved = currentFrameIndex !== lastAutoFrameRef.current;
+      lastAutoFrameRef.current = currentFrameIndex;
+
       setInternalScrollOffset((prev) => {
-        // If current line is above viewport
-        if (currentLineIndex < prev) {
-          return currentLineIndex;
-        }
-        // If current line is below viewport
-        if (currentLineIndex >= prev + viewportHeight) {
-          return Math.max(0, currentLineIndex - Math.floor(viewportHeight / 2));
+        // If the frame moved, we MUST show it.
+        // Otherwise, only auto-scroll if it's currently off-screen.
+        const isOffScreen = currentLineIndex < prev || currentLineIndex >= prev + viewportHeight;
+        
+        if (frameMoved || isOffScreen) {
+          if (currentLineIndex < prev) {
+            return currentLineIndex;
+          }
+          if (currentLineIndex >= prev + viewportHeight) {
+            return Math.max(0, currentLineIndex - Math.floor(viewportHeight / 2));
+          }
         }
         return prev;
       });
     }
-  }, [currentLineIndex, autoScroll, viewportHeight]);
+  }, [currentLineIndex, autoScroll, viewportHeight, currentFrameIndex]);
 
   // ── Clamp scroll offset ────────────────────────────────────
   const maxScroll = Math.max(0, allLines.length - viewportHeight);
