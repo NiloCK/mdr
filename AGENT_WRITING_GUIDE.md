@@ -12,7 +12,7 @@ The reader renders one word at a time at high speed, with a persistent table-of-
 
 2. **Verbosity is OK.** Rate of consumption here is high - feel free to give word-of-mouth style descriptiosn of problem context, solution paths, etc.
 
-3. **Block Rendering is OK.** Normal markdown affordances still exist - viewer has access to traditional rendering of the document so can pause to examine physically structured text such as code, tables, mermaid, etc.
+3. **Block Rendering is OK.** Normal markdown affordances still exist - viewer has access to traditional rendering of the document so the user can pause to examine physically structured text such as code, tables, mermaid, etc.
 
 ---
 
