@@ -89,6 +89,8 @@ export interface Frame {
   listType?: 'bullet' | 'ordered';
   listItemIndex?: number;
   listDepth?: number;
+  /** True for virtual pip-separator frames — not rendered in full-doc view */
+  isPipFrame?: boolean;
 
   // ─── Timing ──────────────────────────────
   /**

@@ -528,7 +528,9 @@ function buildDocLines(doc: Document, maxWidth: number, enriched: boolean): DocL
       }
 
       case 'list': {
-        const blockFrames = doc.frames.slice(block.frameStart, block.frameEnd + 1);
+        const blockFrames = doc.frames
+          .slice(block.frameStart, block.frameEnd + 1)
+          .filter(f => !f.isPipFrame);
         let currentItemFrames: Frame[] = [];
 
         for (let i = 0; i < blockFrames.length; i++) {

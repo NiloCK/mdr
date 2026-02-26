@@ -308,6 +308,8 @@ class ParseContext {
     isEndOfParagraph: boolean = false,
     listInfo?: { type: 'bullet' | 'ordered'; index: number; depth: number },
     isEndOfListItem: boolean = false,
+    orpIndexOverride?: number,
+    isPipFrame: boolean = false,
   ): void {
     if (!word || word.trim().length === 0) return;
 
@@ -317,7 +319,7 @@ class ParseContext {
       word: trimmed,
       sectionId,
       blockId,
-      orpIndex: getOrpIndex(trimmed),
+      orpIndex: orpIndexOverride ?? getOrpIndex(trimmed),
       bold: fmt.bold,
       italic: fmt.italic,
       inlineCode: fmt.inlineCode,
@@ -327,6 +329,7 @@ class ParseContext {
       listType: listInfo?.type,
       listItemIndex: listInfo?.index,
       listDepth: listInfo?.depth,
+      isPipFrame: isPipFrame || undefined,
       pauseMultiplier: computePauseMultiplier(trimmed, {
         isHeading: fmt.heading,
         isInlineCode: fmt.inlineCode,
@@ -481,6 +484,10 @@ class ParseContext {
 
   // ── Top-level token walking ─────────────────────────────
 
+  private buildListPipString(total: number): string {
+    return '·'.repeat(total);
+  }
+
   private walkList(
     t: Tokens.List,
     blockId: number,
@@ -488,20 +495,27 @@ class ParseContext {
     depth: number,
   ): void {
     const type = t.ordered ? 'ordered' : 'bullet';
+    const total = t.items.length;
     t.items.forEach((item, index) => {
-      this.walkListItem(item, index, type, depth, blockId, sectionId);
+      this.walkListItem(item, index, total, type, depth, blockId, sectionId);
     });
   }
 
   private walkListItem(
     item: Tokens.ListItem,
     index: number,
+    total: number,
     type: 'bullet' | 'ordered',
     depth: number,
     blockId: number,
     sectionId: number,
   ): void {
     const listInfo = { type, index, depth };
+
+    // Leading separator before each item: N pips, current index filled.
+    // orpIndex is set to `index` so the active pip always lands at the focal column.
+    const pipString = this.buildListPipString(total);
+    this.addFrame(pipString, blockId, sectionId, { ...DEFAULT_FMT, italic: true }, false, listInfo, true, index, true);
 
     if (item.tokens) {
       for (let i = 0; i < item.tokens.length; i++) {
@@ -511,12 +525,6 @@ class ParseContext {
         if (token.type === 'text' || token.type === 'paragraph') {
           const t = token as Tokens.Text | Tokens.Paragraph;
           this.walkInlineTokens(t.tokens, blockId, sectionId, DEFAULT_FMT, listInfo, isLastToken);
-
-          // If this was the last token of the item, add a virtual separator frame
-          // to provide "breathing room" between items in the RSVP viewer.
-          if (isLastToken) {
-            this.addFrame('· · ·', blockId, sectionId, { ...DEFAULT_FMT, italic: true }, false, listInfo, true);
-          }
         } else if (token.type === 'list') {
           this.walkList(token as Tokens.List, blockId, sectionId, depth + 1);
         }
