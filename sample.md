@@ -27,7 +27,7 @@ Short words: I am on a bus. Long words: internationalization, encapsulation, asy
 4. Collect visual blocks — code, mermaid, table, list
 5. Attach frame ranges to sections and blocks for navigation
 
-### Nested
+### Nested UL
 
 - Rendering
   - Block viewer handles code, mermaid, table, list
@@ -41,6 +41,31 @@ Short words: I am on a bus. Long words: internationalization, encapsulation, asy
   - Space toggles play/pause
   - Arrow keys step one word at a time when paused
   - Section boundary triggers automatic pause
+
+### Nested OL
+
+1. Planning
+   1. Define the problem statement clearly
+   2. Identify constraints and success criteria
+   3. Sketch a rough solution outline
+2. Implementation
+   1. Write the core logic first
+   2. Add error handling and edge cases
+   3. Refactor for clarity
+3. Review
+   1. Run tests and check types
+   2. Read the diff as if you wrote none of it
+
+### Mixed Nesting
+
+- Frontend
+  1. Compile assets with `esbuild`
+  2. Run unit tests with `vitest`
+  3. Lint with `eslint`
+- Backend
+  1. Type-check with `tsc`
+  2. Run integration tests
+  3. Build Docker image
 
 ### Boundary Conditions
 
