@@ -54,6 +54,8 @@ export interface Block {
   frameStart: number;
   /** Index of last RSVP frame generated from this block (inclusive), or -1 */
   frameEnd: number;
+  /** Maximum ORP index found in any frame of this block (for UI stabilization) */
+  maxOrpIndex: number;
 }
 
 export type BlockType = 'prose' | 'code' | 'mermaid' | 'heading' | 'list' | 'blockquote' | 'hr' | 'table';

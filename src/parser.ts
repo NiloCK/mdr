@@ -291,6 +291,7 @@ class ParseContext {
       language,
       frameStart: this.frames.length,
       frameEnd: -1,
+      maxOrpIndex: 0,
     };
     this.blocks.push(block);
     section.blockIds.push(block.id);
@@ -331,6 +332,13 @@ class ParseContext {
         isEndOfParagraph,
       }),
     };
+
+    // Update maxOrpIndex for the parent block
+    const block = this.blocks.find(b => b.id === blockId);
+    if (block) {
+      block.maxOrpIndex = Math.max(block.maxOrpIndex, frame.orpIndex);
+    }
+
     this.frames.push(frame);
   }
 

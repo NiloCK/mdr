@@ -357,6 +357,7 @@ export const App: React.FC<AppProps> = ({
           <TocSidebar
             sections={doc.sections}
             flatSections={doc.flatSections}
+            blocks={doc.blocks}
             activeSectionId={docNav.activeSectionId}
             width={sidebarWidth}
             height={mainHeight}

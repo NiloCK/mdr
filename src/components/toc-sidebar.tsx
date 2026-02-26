@@ -7,7 +7,7 @@
 
 import React, { useMemo } from 'react';
 import { Box, Text } from 'ink';
-import type { Section, Frame } from '../types.js';
+import type { Section, Frame, Block } from '../types.js';
 import { splitAtOrp } from '../orp.js';
 
 // ─── Props ──────────────────────────────────────────────────────────────────
@@ -17,6 +17,8 @@ export interface TocSidebarProps {
   sections: Section[];
   /** Flat list of all sections */
   flatSections: Section[];
+  /** All document blocks */
+  blocks: Block[];
   /** ID of the currently active section */
   activeSectionId: number;
   /** Available width in columns */
@@ -36,6 +38,7 @@ export interface TocSidebarProps {
 export const TocSidebar: React.FC<TocSidebarProps> = ({
   sections,
   flatSections,
+  blocks,
   activeSectionId,
   width,
   height,
@@ -120,6 +123,7 @@ export const TocSidebar: React.FC<TocSidebarProps> = ({
             {line.isActive && (
               <OrpBlock
                 frame={currentFrame}
+                blocks={blocks}
                 width={contentWidth - 1}
                 padding={orpPadding}
               />
@@ -143,11 +147,12 @@ export const TocSidebar: React.FC<TocSidebarProps> = ({
 
 interface OrpBlockProps {
   frame: Frame | null;
+  blocks: Block[];
   width: number;
   padding: number;
 }
 
-const OrpBlock: React.FC<OrpBlockProps> = ({ frame, width, padding }) => {
+const OrpBlock: React.FC<OrpBlockProps> = ({ frame, blocks, width, padding }) => {
   const centerCol = Math.floor(width / 2);
 
   if (!frame) {
@@ -178,20 +183,27 @@ const OrpBlock: React.FC<OrpBlockProps> = ({ frame, width, padding }) => {
 
   // ── List Decorators ──────────────────────────────────────
   let decorator: React.ReactNode = null;
+  let decoratorLen = 0;
   if (frame.isListItem) {
     if (frame.listType === 'ordered') {
       const label = `${(frame.listItemIndex ?? 0) + 1}.`;
-      decorator = (
-        <Text color="yellow" bold>{label}</Text>
-      );
+      decoratorLen = label.length;
+      decorator = <Text color="yellow" bold>{label}</Text>;
     } else {
       const colors = ['cyan', 'magenta', 'blue', 'green', 'yellow'];
-      const color = colors[(frame.listItemIndex ?? 0) % colors.length];
-      decorator = (
-        <Text color={color}>●</Text>
-      );
+      const color = colors[(frame.listItemIndex ?? 0) % colors.length]!;
+      decoratorLen = 1; // "●"
+      decorator = <Text color={color}>●</Text>;
     }
   }
+
+  // Find max ORP offset for this block to stabilize decorator
+  const block = blocks.find(b => b.id === frame.blockId);
+  const maxOffset = block?.maxOrpIndex ?? parts.offsetLeft;
+  
+  // Stabilize the decorator position relative to the center
+  const decoratorCol = Math.max(0, centerCol - maxOffset - 2);
+  const gapSize = Math.max(0, leftPad - decoratorCol - decoratorLen);
 
   return (
     <Box flexDirection="column" width={width}>
@@ -205,22 +217,20 @@ const OrpBlock: React.FC<OrpBlockProps> = ({ frame, width, padding }) => {
       </Box>
 
       {/* Word with ORP alignment and decorator */}
-      <Box flexDirection="row">
-        <Box width={leftPad} justifyContent="flex-end" paddingRight={1}>
-          {decorator}
-        </Box>
-        <Text>
-          {frame.inlineCode ? <Text dimColor>‹</Text> : null}
-          <Text bold={wordBold} italic={frame.italic} color={wordColor}>
-            {parts.before}
-          </Text>
-          <Text bold color="red">{parts.focal}</Text>
-          <Text bold={wordBold} italic={frame.italic} color={wordColor}>
-            {parts.after}
-          </Text>
-          {frame.inlineCode ? <Text dimColor>›</Text> : null}
+      <Text>
+        {' '.repeat(decoratorCol)}
+        {decorator}
+        {' '.repeat(gapSize)}
+        {frame.inlineCode ? <Text dimColor>‹</Text> : null}
+        <Text bold={wordBold} italic={frame.italic} color={wordColor}>
+          {parts.before}
         </Text>
-      </Box>
+        <Text bold color="red">{parts.focal}</Text>
+        <Text bold={wordBold} italic={frame.italic} color={wordColor}>
+          {parts.after}
+        </Text>
+        {frame.inlineCode ? <Text dimColor>›</Text> : null}
+      </Text>
 
       {/* Reticle bottom */}
       <Text dimColor color="gray">{reticleBot}</Text>
