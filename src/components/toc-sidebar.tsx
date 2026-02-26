@@ -176,14 +176,38 @@ const OrpBlock: React.FC<OrpBlockProps> = ({ frame, width, padding }) => {
   const reticle = ' '.repeat(centerCol) + '▼';
   const reticleBot = ' '.repeat(centerCol) + '▲';
 
+  // ── List Decorators ──────────────────────────────────────
+  let decorator: React.ReactNode = null;
+  if (frame.isListItem) {
+    if (frame.listType === 'ordered') {
+      const label = `${(frame.listItemIndex ?? 0) + 1}.`;
+      decorator = (
+        <Box position="absolute" marginLeft={0}>
+          <Text color="yellow" bold>{label}</Text>
+        </Box>
+      );
+    } else {
+      const colors = ['cyan', 'magenta', 'blue', 'green', 'yellow'];
+      const color = colors[(frame.listItemIndex ?? 0) % colors.length];
+      decorator = (
+        <Box position="absolute" marginLeft={1}>
+          <Text color={color}>●</Text>
+        </Box>
+      );
+    }
+  }
+
   return (
-    <>
+    <Box flexDirection="column" width={width}>
       {Array.from({ length: padding }).map((_, i) => (
         <Text key={`pre-${i}`}>{' '}</Text>
       ))}
 
       {/* Reticle top */}
-      <Text dimColor color="gray">{reticle}</Text>
+      <Box>
+        <Text dimColor color="gray">{reticle}</Text>
+        {decorator}
+      </Box>
 
       {/* Word with ORP alignment */}
       <Text>
@@ -205,7 +229,7 @@ const OrpBlock: React.FC<OrpBlockProps> = ({ frame, width, padding }) => {
       {Array.from({ length: padding }).map((_, i) => (
         <Text key={`post-${i}`}>{' '}</Text>
       ))}
-    </>
+    </Box>
   );
 };
 

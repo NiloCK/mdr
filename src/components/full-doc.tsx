@@ -528,26 +528,119 @@ function buildDocLines(doc: Document, maxWidth: number, enriched: boolean): DocL
         break;
       }
 
-      case 'list':
-      case 'blockquote':
-      case 'table':
-      case 'hr':
-      default: {
-        // Simplified rendering for other types, similar to prose but without frame tracking for now
-        // except where they actually generate frames (blockquote, table)
-        const content = block.content || '';
-        const wrapped = wordWrap(content, Math.max(10, maxWidth - 4));
-        for (const wl of wrapped) {
+      case 'list': {
+        const blockFrames = doc.frames.slice(block.frameStart, block.frameEnd + 1);
+        let currentItemFrames: Frame[] = [];
+
+        for (let i = 0; i < blockFrames.length; i++) {
+          const f = blockFrames[i]!;
+          const nextF = blockFrames[i + 1];
+          currentItemFrames.push(f);
+
+          const isLastFrameInItem =
+            !nextF ||
+            nextF.listItemIndex !== f.listItemIndex ||
+            nextF.listDepth !== f.listDepth;
+
+          if (isLastFrameInItem) {
+            const depth = f.listDepth ?? 0;
+            const indent = '  '.repeat(depth);
+            const bullet =
+              f.listType === 'ordered' ? `${(f.listItemIndex ?? 0) + 1}.` : '•';
+            const prefix = `${indent}${bullet} `;
+
+            const wrapResult = wrapFrames(
+              currentItemFrames,
+              Math.max(10, maxWidth - 4 - prefix.length),
+            );
+            wrapResult.forEach((wr, j) => {
+              lines.push({
+                text: (j === 0 ? prefix : ' '.repeat(prefix.length)) + wr.text,
+                type: 'list',
+                sectionId: currentSectionId,
+                blockId: currentBlockId,
+                frameStart: wr.frameStart,
+                frameEnd: wr.frameEnd,
+                frames: wr.frames,
+              });
+            });
+            currentItemFrames = [];
+          }
+        }
+        lines.push({
+          text: '',
+          type: 'blank',
+          sectionId: currentSectionId,
+          blockId: currentBlockId,
+        });
+        break;
+      }
+
+      case 'blockquote': {
+        const blockFrames = doc.frames.slice(block.frameStart, block.frameEnd + 1);
+        const prefix = '│ ';
+        const wrapResult = wrapFrames(
+          blockFrames,
+          Math.max(10, maxWidth - 4 - prefix.length),
+        );
+        wrapResult.forEach((wr) => {
           lines.push({
-            text: wl,
-            type: block.type === 'hr' ? 'hr' : 'prose',
+            text: prefix + wr.text,
+            type: 'blockquote',
+            sectionId: currentSectionId,
+            blockId: currentBlockId,
+            frameStart: wr.frameStart,
+            frameEnd: wr.frameEnd,
+            frames: wr.frames,
+          });
+        });
+        lines.push({
+          text: '',
+          type: 'blank',
+          sectionId: currentSectionId,
+          blockId: currentBlockId,
+        });
+        break;
+      }
+
+      case 'table': {
+        const tableLines = (block.content || '').split('\n');
+        for (const tl of tableLines) {
+          lines.push({
+            text: tl,
+            type: 'table',
             sectionId: currentSectionId,
             blockId: currentBlockId,
             frameStart: block.frameStart !== -1 ? block.frameStart : undefined,
             frameEnd: block.frameEnd !== -1 ? block.frameEnd : undefined,
           });
         }
-        lines.push({ text: '', type: 'blank', sectionId: currentSectionId, blockId: currentBlockId });
+        lines.push({
+          text: '',
+          type: 'blank',
+          sectionId: currentSectionId,
+          blockId: currentBlockId,
+        });
+        break;
+      }
+
+      case 'hr': {
+        lines.push({
+          text: '─'.repeat(Math.max(10, maxWidth - 4)),
+          type: 'hr',
+          sectionId: currentSectionId,
+          blockId: currentBlockId,
+        });
+        lines.push({
+          text: '',
+          type: 'blank',
+          sectionId: currentSectionId,
+          blockId: currentBlockId,
+        });
+        break;
+      }
+
+      default: {
         break;
       }
     }

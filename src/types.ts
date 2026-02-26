@@ -82,6 +82,12 @@ export interface Frame {
   /** Heading depth if heading is true */
   headingDepth: number;
 
+  // ─── List info ───────────────────────────
+  isListItem?: boolean;
+  listType?: 'bullet' | 'ordered';
+  listItemIndex?: number;
+  listDepth?: number;
+
   // ─── Timing ──────────────────────────────
   /**
    * Multiplier applied to base inter-word delay.

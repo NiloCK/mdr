@@ -305,6 +305,7 @@ class ParseContext {
     sectionId: number,
     fmt: InlineFormatting,
     isEndOfParagraph: boolean = false,
+    listInfo?: { type: 'bullet' | 'ordered'; index: number; depth: number },
   ): void {
     if (!word || word.trim().length === 0) return;
 
@@ -320,6 +321,10 @@ class ParseContext {
       inlineCode: fmt.inlineCode,
       heading: fmt.heading,
       headingDepth: fmt.headingDepth,
+      isListItem: !!listInfo,
+      listType: listInfo?.type,
+      listItemIndex: listInfo?.index,
+      listDepth: listInfo?.depth,
       pauseMultiplier: computePauseMultiplier(trimmed, {
         isHeading: fmt.heading,
         isInlineCode: fmt.inlineCode,
@@ -331,15 +336,12 @@ class ParseContext {
 
   // ── Inline token walking (recursive) ───────────────────
 
-  /**
-   * Walk inline tokens (text, strong, em, codespan, link, etc.)
-   * and emit Frame objects for every word encountered.
-   */
   private walkInlineTokens(
     tokens: Token[] | undefined,
     blockId: number,
     sectionId: number,
     fmt: InlineFormatting,
+    listInfo?: { type: 'bullet' | 'ordered'; index: number; depth: number },
   ): void {
     if (!tokens) return;
 
@@ -349,12 +351,12 @@ class ParseContext {
           const t = token as Tokens.Text;
           // Text may contain nested tokens (marked sometimes nests em/strong inside text)
           if (t.tokens && t.tokens.length > 0) {
-            this.walkInlineTokens(t.tokens, blockId, sectionId, fmt);
+            this.walkInlineTokens(t.tokens, blockId, sectionId, fmt, listInfo);
           } else {
             const rawText = t.text ?? (t as any).raw ?? '';
             const words = rawText.split(/\s+/).filter((w: string) => w.length > 0);
             for (const w of words) {
-              this.addFrame(w, blockId, sectionId, fmt);
+              this.addFrame(w, blockId, sectionId, fmt, false, listInfo);
             }
           }
           break;
@@ -367,6 +369,7 @@ class ParseContext {
             blockId,
             sectionId,
             { ...fmt, bold: true },
+            listInfo,
           );
           break;
         }
@@ -378,6 +381,7 @@ class ParseContext {
             blockId,
             sectionId,
             { ...fmt, italic: true },
+            listInfo,
           );
           break;
         }
@@ -386,14 +390,14 @@ class ParseContext {
           const t = token as Tokens.Codespan;
           // Keep inline code as a single frame — don't split on spaces
           // (e.g. `foo bar` stays as one unit)
-          this.addFrame(t.text, blockId, sectionId, { ...fmt, inlineCode: true });
+          this.addFrame(t.text, blockId, sectionId, { ...fmt, inlineCode: true }, false, listInfo);
           break;
         }
 
         case 'link': {
           const t = token as Tokens.Link;
           // Walk the link's display text as normal inline content
-          this.walkInlineTokens(t.tokens, blockId, sectionId, fmt);
+          this.walkInlineTokens(t.tokens, blockId, sectionId, fmt, listInfo);
           break;
         }
 
@@ -403,7 +407,7 @@ class ParseContext {
           if (t.text) {
             const words = t.text.split(/\s+/).filter((w: string) => w.length > 0);
             for (const w of words) {
-              this.addFrame(w, blockId, sectionId, { ...fmt, italic: true });
+              this.addFrame(w, blockId, sectionId, { ...fmt, italic: true }, false, listInfo);
             }
           }
           break;
@@ -423,14 +427,14 @@ class ParseContext {
         case 'del': {
           // Strikethrough — walk children with italic styling as visual hint
           const t = token as Tokens.Del;
-          this.walkInlineTokens(t.tokens, blockId, sectionId, { ...fmt, italic: true });
+          this.walkInlineTokens(t.tokens, blockId, sectionId, { ...fmt, italic: true }, listInfo);
           break;
         }
 
         case 'escape': {
           const t = token as Tokens.Escape;
           if (t.text) {
-            this.addFrame(t.text, blockId, sectionId, fmt);
+            this.addFrame(t.text, blockId, sectionId, fmt, false, listInfo);
           }
           break;
         }
@@ -440,12 +444,12 @@ class ParseContext {
           if ('text' in token && typeof token.text === 'string' && token.text.trim()) {
             const words = token.text.split(/\s+/).filter((w: string) => w.length > 0);
             for (const w of words) {
-              this.addFrame(w, blockId, sectionId, fmt);
+              this.addFrame(w, blockId, sectionId, fmt, false, listInfo);
             }
           }
           // If the token has sub-tokens, walk them
           if ('tokens' in token && Array.isArray(token.tokens)) {
-            this.walkInlineTokens(token.tokens, blockId, sectionId, fmt);
+            this.walkInlineTokens(token.tokens, blockId, sectionId, fmt, listInfo);
           }
           break;
         }
@@ -454,6 +458,48 @@ class ParseContext {
   }
 
   // ── Top-level token walking ─────────────────────────────
+
+  private walkList(
+    t: Tokens.List,
+    blockId: number,
+    sectionId: number,
+    depth: number,
+  ): void {
+    const type = t.ordered ? 'ordered' : 'bullet';
+    t.items.forEach((item, index) => {
+      this.walkListItem(item, index, type, depth, blockId, sectionId);
+    });
+  }
+
+  private walkListItem(
+    item: Tokens.ListItem,
+    index: number,
+    type: 'bullet' | 'ordered',
+    depth: number,
+    blockId: number,
+    sectionId: number,
+  ): void {
+    const listInfo = { type, index, depth };
+
+    if (item.tokens) {
+      for (const token of item.tokens) {
+        if (token.type === 'text' || token.type === 'paragraph') {
+          const t = token as Tokens.Text | Tokens.Paragraph;
+          this.walkInlineTokens(t.tokens, blockId, sectionId, DEFAULT_FMT, listInfo);
+
+          // End-of-item pause
+          if (this.frames.length > 0) {
+            this.frames[this.frames.length - 1]!.pauseMultiplier = Math.max(
+              this.frames[this.frames.length - 1]!.pauseMultiplier,
+              2.0,
+            );
+          }
+        } else if (token.type === 'list') {
+          this.walkList(token as Tokens.List, blockId, sectionId, depth + 1);
+        }
+      }
+    }
+  }
 
   walkTopLevel(tokens: Token[]): void {
     for (let i = 0; i < tokens.length; i++) {
@@ -534,8 +580,10 @@ class ParseContext {
 
         case 'list': {
           const t = token as Tokens.List;
-          // Lists render as visual blocks in the block viewer — no RSVP frames.
-          this.addBlock('list', renderAsciiList(t));
+          const section = this.currentSection();
+          const block = this.addBlock('list', renderAsciiList(t));
+          this.walkList(t, block.id, section.id, 0);
+          block.frameEnd = this.frames.length - 1;
           break;
         }
 
