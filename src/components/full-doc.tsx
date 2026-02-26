@@ -63,6 +63,8 @@ interface DocLine {
   frames?: Frame[];
   /** true when text contains ANSI escape codes */
   highlighted?: boolean;
+  /** Non-frame prefix (bullet + indent) prepended before frame words */
+  textPrefix?: string;
 }
 
 // ─── Component ──────────────────────────────────────────────────────────────
@@ -277,6 +279,7 @@ const DocLineComponent: React.FC<{
 
     return (
       <Text>
+        {l.textPrefix ? <Text>{l.textPrefix}</Text> : null}
         {l.frames.map((f, i) => {
           const isCurrentWord = f.index === currentFrameIndex;
           return (
@@ -564,8 +567,10 @@ function buildDocLines(doc: Document, maxWidth: number, enriched: boolean): DocL
               Math.max(10, maxWidth - 4 - prefixPlain.length),
             );
             wrapResult.forEach((wr, j) => {
+              const linePrefix = j === 0 ? prefix : ' '.repeat(prefixPlain.length);
               lines.push({
-                text: (j === 0 ? prefix : ' '.repeat(prefixPlain.length)) + wr.text,
+                text: linePrefix + wr.text,
+                textPrefix: linePrefix,
                 type: 'list',
                 sectionId: currentSectionId,
                 blockId: currentBlockId,

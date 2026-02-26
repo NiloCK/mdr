@@ -338,10 +338,13 @@ class ParseContext {
       }),
     };
 
-    // Update maxOrpIndex for the parent block
-    const block = this.blocks.find(b => b.id === blockId);
-    if (block) {
-      block.maxOrpIndex = Math.max(block.maxOrpIndex, frame.orpIndex);
+    // Update maxOrpIndex for the parent block (pip frames excluded — their
+    // orpIndex encodes list position, not word length, and would skew layout).
+    if (!isPipFrame) {
+      const block = this.blocks.find(b => b.id === blockId);
+      if (block) {
+        block.maxOrpIndex = Math.max(block.maxOrpIndex, frame.orpIndex);
+      }
     }
 
     this.frames.push(frame);
