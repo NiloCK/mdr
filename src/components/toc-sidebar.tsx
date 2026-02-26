@@ -182,17 +182,13 @@ const OrpBlock: React.FC<OrpBlockProps> = ({ frame, width, padding }) => {
     if (frame.listType === 'ordered') {
       const label = `${(frame.listItemIndex ?? 0) + 1}.`;
       decorator = (
-        <Box position="absolute" marginLeft={0}>
-          <Text color="yellow" bold>{label}</Text>
-        </Box>
+        <Text color="yellow" bold>{label}</Text>
       );
     } else {
       const colors = ['cyan', 'magenta', 'blue', 'green', 'yellow'];
       const color = colors[(frame.listItemIndex ?? 0) % colors.length];
       decorator = (
-        <Box position="absolute" marginLeft={1}>
-          <Text color={color}>●</Text>
-        </Box>
+        <Text color={color}>●</Text>
       );
     }
   }
@@ -206,22 +202,25 @@ const OrpBlock: React.FC<OrpBlockProps> = ({ frame, width, padding }) => {
       {/* Reticle top */}
       <Box>
         <Text dimColor color="gray">{reticle}</Text>
-        {decorator}
       </Box>
 
-      {/* Word with ORP alignment */}
-      <Text>
-        {' '.repeat(leftPad)}
-        {frame.inlineCode ? <Text dimColor>‹</Text> : null}
-        <Text bold={wordBold} italic={frame.italic} color={wordColor}>
-          {parts.before}
+      {/* Word with ORP alignment and decorator */}
+      <Box flexDirection="row">
+        <Box width={leftPad} justifyContent="flex-end" paddingRight={1}>
+          {decorator}
+        </Box>
+        <Text>
+          {frame.inlineCode ? <Text dimColor>‹</Text> : null}
+          <Text bold={wordBold} italic={frame.italic} color={wordColor}>
+            {parts.before}
+          </Text>
+          <Text bold color="red">{parts.focal}</Text>
+          <Text bold={wordBold} italic={frame.italic} color={wordColor}>
+            {parts.after}
+          </Text>
+          {frame.inlineCode ? <Text dimColor>›</Text> : null}
         </Text>
-        <Text bold color="red">{parts.focal}</Text>
-        <Text bold={wordBold} italic={frame.italic} color={wordColor}>
-          {parts.after}
-        </Text>
-        {frame.inlineCode ? <Text dimColor>›</Text> : null}
-      </Text>
+      </Box>
 
       {/* Reticle bottom */}
       <Text dimColor color="gray">{reticleBot}</Text>

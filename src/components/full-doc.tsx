@@ -14,6 +14,7 @@ import React, { useMemo, useEffect, useRef } from 'react';
 import { Box, Text } from 'ink';
 import { highlight } from 'cli-highlight';
 import { renderMermaidASCII } from 'beautiful-mermaid';
+import chalk from 'chalk';
 import type { Document, Section, Frame, Block } from '../types.js';
 
 // ─── Props ──────────────────────────────────────────────────────────────────
@@ -362,9 +363,7 @@ const DocLineComponent: React.FC<{
       return (
         <Text>
           <Text color={marginColor}>{marginChar}</Text>
-          <Text dimColor={!isCurrentBlock}>
-            {displayText}
-          </Text>
+          {renderTextWithWordHighlight(line)}
         </Text>
       );
     }
@@ -545,23 +544,33 @@ function buildDocLines(doc: Document, maxWidth: number, enriched: boolean): DocL
           if (isLastFrameInItem) {
             const depth = f.listDepth ?? 0;
             const indent = '  '.repeat(depth);
-            const bullet =
-              f.listType === 'ordered' ? `${(f.listItemIndex ?? 0) + 1}.` : '•';
+            
+            let bullet: string;
+            if (f.listType === 'ordered') {
+              bullet = chalk.yellow.bold(`${(f.listItemIndex ?? 0) + 1}.`);
+            } else {
+              const colors = [chalk.cyan, chalk.magenta, chalk.blue, chalk.green, chalk.yellow];
+              const color = colors[(f.listItemIndex ?? 0) % colors.length]!;
+              bullet = color('•');
+            }
+
             const prefix = `${indent}${bullet} `;
+            const prefixPlain = `${indent}${(f.listItemIndex ?? 0) + 1}. `;
 
             const wrapResult = wrapFrames(
               currentItemFrames,
-              Math.max(10, maxWidth - 4 - prefix.length),
+              Math.max(10, maxWidth - 4 - prefixPlain.length),
             );
             wrapResult.forEach((wr, j) => {
               lines.push({
-                text: (j === 0 ? prefix : ' '.repeat(prefix.length)) + wr.text,
+                text: (j === 0 ? prefix : ' '.repeat(prefixPlain.length)) + wr.text,
                 type: 'list',
                 sectionId: currentSectionId,
                 blockId: currentBlockId,
                 frameStart: wr.frameStart,
                 frameEnd: wr.frameEnd,
                 frames: wr.frames,
+                highlighted: true,
               });
             });
             currentItemFrames = [];
