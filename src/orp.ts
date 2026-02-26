@@ -102,13 +102,14 @@ export function computePauseMultiplier(
     isHeading?: boolean;
     isInlineCode?: boolean;
     isEndOfParagraph?: boolean;
+    isEndOfListItem?: boolean;
   } = {},
 ): number {
   let m = 1.0;
 
-  // End-of-paragraph gets the largest bump
-  if (flags.isEndOfParagraph) {
-    m = Math.max(m, 2.5);
+  // End-of-item/paragraph gets the largest bump
+  if (flags.isEndOfParagraph || flags.isEndOfListItem) {
+    m = Math.max(m, flags.isEndOfParagraph ? 2.5 : 3.0);
   }
 
   // Sentence-ending punctuation

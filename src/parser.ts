@@ -307,6 +307,7 @@ class ParseContext {
     fmt: InlineFormatting,
     isEndOfParagraph: boolean = false,
     listInfo?: { type: 'bullet' | 'ordered'; index: number; depth: number },
+    isEndOfListItem: boolean = false,
   ): void {
     if (!word || word.trim().length === 0) return;
 
@@ -330,6 +331,7 @@ class ParseContext {
         isHeading: fmt.heading,
         isInlineCode: fmt.inlineCode,
         isEndOfParagraph,
+        isEndOfListItem,
       }),
     };
 
@@ -350,21 +352,27 @@ class ParseContext {
     sectionId: number,
     fmt: InlineFormatting,
     listInfo?: { type: 'bullet' | 'ordered'; index: number; depth: number },
+    isEndOfListItem: boolean = false,
   ): void {
     if (!tokens) return;
 
-    for (const token of tokens) {
+    for (let i = 0; i < tokens.length; i++) {
+      const token = tokens[i]!;
+      const isLastToken = i === tokens.length - 1;
+
       switch (token.type) {
         case 'text': {
           const t = token as Tokens.Text;
           // Text may contain nested tokens (marked sometimes nests em/strong inside text)
           if (t.tokens && t.tokens.length > 0) {
-            this.walkInlineTokens(t.tokens, blockId, sectionId, fmt, listInfo);
+            this.walkInlineTokens(t.tokens, blockId, sectionId, fmt, listInfo, isEndOfListItem && isLastToken);
           } else {
             const rawText = t.text ?? (t as any).raw ?? '';
             const words = rawText.split(/\s+/).filter((w: string) => w.length > 0);
-            for (const w of words) {
-              this.addFrame(w, blockId, sectionId, fmt, false, listInfo);
+            for (let j = 0; j < words.length; j++) {
+              const w = words[j]!;
+              const isLastWord = isLastToken && j === words.length - 1;
+              this.addFrame(w, blockId, sectionId, fmt, false, listInfo, isEndOfListItem && isLastWord);
             }
           }
           break;
@@ -378,6 +386,7 @@ class ParseContext {
             sectionId,
             { ...fmt, bold: true },
             listInfo,
+            isEndOfListItem && isLastToken,
           );
           break;
         }
@@ -390,6 +399,7 @@ class ParseContext {
             sectionId,
             { ...fmt, italic: true },
             listInfo,
+            isEndOfListItem && isLastToken,
           );
           break;
         }
@@ -398,14 +408,14 @@ class ParseContext {
           const t = token as Tokens.Codespan;
           // Keep inline code as a single frame — don't split on spaces
           // (e.g. `foo bar` stays as one unit)
-          this.addFrame(t.text, blockId, sectionId, { ...fmt, inlineCode: true }, false, listInfo);
+          this.addFrame(t.text, blockId, sectionId, { ...fmt, inlineCode: true }, false, listInfo, isEndOfListItem && isLastToken);
           break;
         }
 
         case 'link': {
           const t = token as Tokens.Link;
           // Walk the link's display text as normal inline content
-          this.walkInlineTokens(t.tokens, blockId, sectionId, fmt, listInfo);
+          this.walkInlineTokens(t.tokens, blockId, sectionId, fmt, listInfo, isEndOfListItem && isLastToken);
           break;
         }
 
@@ -414,8 +424,10 @@ class ParseContext {
           // Flash the alt text
           if (t.text) {
             const words = t.text.split(/\s+/).filter((w: string) => w.length > 0);
-            for (const w of words) {
-              this.addFrame(w, blockId, sectionId, { ...fmt, italic: true }, false, listInfo);
+            for (let j = 0; j < words.length; j++) {
+              const w = words[j]!;
+              const isLastWord = isLastToken && j === words.length - 1;
+              this.addFrame(w, blockId, sectionId, { ...fmt, italic: true }, false, listInfo, isEndOfListItem && isLastWord);
             }
           }
           break;
@@ -435,14 +447,14 @@ class ParseContext {
         case 'del': {
           // Strikethrough — walk children with italic styling as visual hint
           const t = token as Tokens.Del;
-          this.walkInlineTokens(t.tokens, blockId, sectionId, { ...fmt, italic: true }, listInfo);
+          this.walkInlineTokens(t.tokens, blockId, sectionId, { ...fmt, italic: true }, listInfo, isEndOfListItem && isLastToken);
           break;
         }
 
         case 'escape': {
           const t = token as Tokens.Escape;
           if (t.text) {
-            this.addFrame(t.text, blockId, sectionId, fmt, false, listInfo);
+            this.addFrame(t.text, blockId, sectionId, fmt, false, listInfo, isEndOfListItem && isLastToken);
           }
           break;
         }
@@ -451,13 +463,15 @@ class ParseContext {
           // Fallback: if the token has a `text` property, try to use it
           if ('text' in token && typeof token.text === 'string' && token.text.trim()) {
             const words = token.text.split(/\s+/).filter((w: string) => w.length > 0);
-            for (const w of words) {
-              this.addFrame(w, blockId, sectionId, fmt, false, listInfo);
+            for (let j = 0; j < words.length; j++) {
+              const w = words[j]!;
+              const isLastWord = isLastToken && j === words.length - 1;
+              this.addFrame(w, blockId, sectionId, fmt, false, listInfo, isEndOfListItem && isLastWord);
             }
           }
           // If the token has sub-tokens, walk them
           if ('tokens' in token && Array.isArray(token.tokens)) {
-            this.walkInlineTokens(token.tokens, blockId, sectionId, fmt, listInfo);
+            this.walkInlineTokens(token.tokens, blockId, sectionId, fmt, listInfo, isEndOfListItem && isLastToken);
           }
           break;
         }
@@ -490,17 +504,18 @@ class ParseContext {
     const listInfo = { type, index, depth };
 
     if (item.tokens) {
-      for (const token of item.tokens) {
+      for (let i = 0; i < item.tokens.length; i++) {
+        const token = item.tokens[i]!;
+        const isLastToken = i === item.tokens.length - 1;
+
         if (token.type === 'text' || token.type === 'paragraph') {
           const t = token as Tokens.Text | Tokens.Paragraph;
-          this.walkInlineTokens(t.tokens, blockId, sectionId, DEFAULT_FMT, listInfo);
+          this.walkInlineTokens(t.tokens, blockId, sectionId, DEFAULT_FMT, listInfo, isLastToken);
 
-          // End-of-item pause
-          if (this.frames.length > 0) {
-            this.frames[this.frames.length - 1]!.pauseMultiplier = Math.max(
-              this.frames[this.frames.length - 1]!.pauseMultiplier,
-              2.0,
-            );
+          // If this was the last token of the item, add a virtual separator frame
+          // to provide "breathing room" between items in the RSVP viewer.
+          if (isLastToken) {
+            this.addFrame('· · ·', blockId, sectionId, { ...DEFAULT_FMT, italic: true }, false, listInfo, true);
           }
         } else if (token.type === 'list') {
           this.walkList(token as Tokens.List, blockId, sectionId, depth + 1);
@@ -530,20 +545,13 @@ class ParseContext {
 
           // Walk the heading's inline tokens if available, else split raw text
           if (t.tokens && t.tokens.length > 0) {
-            this.walkInlineTokens(t.tokens, block.id, section.id, headingFmt);
+            this.walkInlineTokens(t.tokens, block.id, section.id, headingFmt, undefined, true);
           } else {
             const words = t.text.split(/\s+/).filter((w) => w.length > 0);
-            for (const w of words) {
-              this.addFrame(w, block.id, section.id, headingFmt);
+            for (let j = 0; j < words.length; j++) {
+              const isLastWord = j === words.length - 1;
+              this.addFrame(words[j]!, block.id, section.id, headingFmt, false, undefined, isLastWord);
             }
-          }
-
-          // Mark end-of-heading pause on the last frame
-          if (this.frames.length > 0) {
-            this.frames[this.frames.length - 1]!.pauseMultiplier = Math.max(
-              this.frames[this.frames.length - 1]!.pauseMultiplier,
-              2.5,
-            );
           }
 
           block.frameEnd = this.frames.length - 1;
@@ -555,7 +563,7 @@ class ParseContext {
           const section = this.currentSection();
           const block = this.addBlock('prose', t.text ?? t.raw);
 
-          this.walkInlineTokens(t.tokens, block.id, section.id, DEFAULT_FMT);
+          this.walkInlineTokens(t.tokens, block.id, section.id, DEFAULT_FMT, undefined, false);
 
           // End-of-paragraph pause
           if (this.frames.length > 0) {
@@ -602,29 +610,27 @@ class ParseContext {
 
           // Walk blockquote inner tokens
           if (t.tokens && t.tokens.length > 0) {
-            for (const innerToken of t.tokens) {
+            for (let j = 0; j < t.tokens.length; j++) {
+              const innerToken = t.tokens[j]!;
+              const isLastToken = j === t.tokens.length - 1;
+
               if (innerToken.type === 'paragraph') {
                 const ip = innerToken as Tokens.Paragraph;
                 this.walkInlineTokens(ip.tokens, block.id, section.id, {
                   ...DEFAULT_FMT,
                   italic: true,
-                });
+                }, undefined, isLastToken);
               } else if ('tokens' in innerToken && Array.isArray(innerToken.tokens)) {
                 this.walkInlineTokens(
                   innerToken.tokens,
                   block.id,
                   section.id,
                   { ...DEFAULT_FMT, italic: true },
+                  undefined,
+                  isLastToken,
                 );
               }
             }
-          }
-
-          if (this.frames.length > 0) {
-            this.frames[this.frames.length - 1]!.pauseMultiplier = Math.max(
-              this.frames[this.frames.length - 1]!.pauseMultiplier,
-              2.0,
-            );
           }
 
           block.frameEnd = this.frames.length - 1;
@@ -647,19 +653,15 @@ class ParseContext {
               );
             }
           }
-          for (const row of t.rows) {
-            for (const cell of row) {
+          for (let rowIdx = 0; rowIdx < t.rows.length; rowIdx++) {
+            const row = t.rows[rowIdx]!;
+            for (let cellIdx = 0; cellIdx < row.length; cellIdx++) {
+              const cell = row[cellIdx]!;
+              const isLastCellInLastRow = rowIdx === t.rows.length - 1 && cellIdx === row.length - 1;
               if (cell.tokens) {
-                this.walkInlineTokens(cell.tokens, block.id, section.id, DEFAULT_FMT);
+                this.walkInlineTokens(cell.tokens, block.id, section.id, DEFAULT_FMT, undefined, isLastCellInLastRow);
               }
             }
-          }
-
-          if (this.frames.length > 0) {
-            this.frames[this.frames.length - 1]!.pauseMultiplier = Math.max(
-              this.frames[this.frames.length - 1]!.pauseMultiplier,
-              2.0,
-            );
           }
 
           block.frameEnd = this.frames.length - 1;
@@ -693,8 +695,9 @@ class ParseContext {
             const section = this.currentSection();
             const block = this.addBlock('prose', textContent);
             const words = textContent.split(/\s+/).filter((w: string) => w.length > 0);
-            for (const w of words) {
-              this.addFrame(w, block.id, section.id, DEFAULT_FMT);
+            for (let j = 0; j < words.length; j++) {
+              const isLastWord = j === words.length - 1;
+              this.addFrame(words[j]!, block.id, section.id, DEFAULT_FMT, false, undefined, isLastWord);
             }
             block.frameEnd = this.frames.length - 1;
           }
@@ -707,11 +710,12 @@ class ParseContext {
             const section = this.currentSection();
             const block = this.addBlock('prose', token.text);
             if ('tokens' in token && Array.isArray(token.tokens)) {
-              this.walkInlineTokens(token.tokens, block.id, section.id, DEFAULT_FMT);
+              this.walkInlineTokens(token.tokens, block.id, section.id, DEFAULT_FMT, undefined, true);
             } else {
               const words = token.text.split(/\s+/).filter((w: string) => w.length > 0);
-              for (const w of words) {
-                this.addFrame(w, block.id, section.id, DEFAULT_FMT);
+              for (let j = 0; j < words.length; j++) {
+                const isLastWord = j === words.length - 1;
+                this.addFrame(words[j]!, block.id, section.id, DEFAULT_FMT, false, undefined, isLastWord);
               }
             }
             block.frameEnd = this.frames.length - 1;
