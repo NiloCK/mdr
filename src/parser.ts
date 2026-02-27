@@ -487,8 +487,31 @@ class ParseContext {
 
   // ── Top-level token walking ─────────────────────────────
 
-  private buildListPipString(total: number): string {
-    return '·'.repeat(total);
+  // Builds a pip string for a UL item, encoding the full ancestor path.
+  // Each ancestor level contributes its pips (○ at active index, · elsewhere),
+  // separated by │. The current level contributes · pips with the active pip
+  // landing at the focal column via the returned orpIndex.
+  // OL items skip this and use a simple flat pip string instead.
+  private buildUlPathPip(
+    ancestors: Array<{ total: number; activeIndex: number }>,
+    currentTotal: number,
+    currentIndex: number,
+  ): { pip: string; orpIndex: number } {
+    const sep = '│';
+    const parts: string[] = [];
+
+    for (const a of ancestors) {
+      parts.push(
+        Array.from({ length: a.total }, (_, j) => (j === a.activeIndex ? '○' : '·')).join(''),
+      );
+    }
+    parts.push('·'.repeat(currentTotal));
+
+    const pip = parts.join(sep);
+    // orpIndex: skip past all ancestor sections (pips + separators), land on currentIndex
+    const orpIndex = ancestors.reduce((acc, a) => acc + a.total + sep.length, 0) + currentIndex;
+
+    return { pip, orpIndex };
   }
 
   private walkList(
@@ -496,11 +519,12 @@ class ParseContext {
     blockId: number,
     sectionId: number,
     depth: number,
+    ancestors: Array<{ total: number; activeIndex: number }> = [],
   ): void {
     const type = t.ordered ? 'ordered' : 'bullet';
     const total = t.items.length;
     t.items.forEach((item, index) => {
-      this.walkListItem(item, index, total, type, depth, blockId, sectionId);
+      this.walkListItem(item, index, total, type, depth, blockId, sectionId, ancestors);
     });
   }
 
@@ -512,13 +536,22 @@ class ParseContext {
     depth: number,
     blockId: number,
     sectionId: number,
+    ancestors: Array<{ total: number; activeIndex: number }> = [],
   ): void {
     const listInfo = { type, index, depth };
 
-    // Leading separator before each item: N pips, current index filled.
-    // orpIndex is set to `index` so the active pip always lands at the focal column.
-    const pipString = this.buildListPipString(total);
-    this.addFrame(pipString, blockId, sectionId, { ...DEFAULT_FMT, italic: true }, false, listInfo, true, index, true);
+    // UL: path pips encode ancestor context + current position.
+    // OL: simple flat pip string — the numbered decorator already provides context.
+    let pipString: string;
+    let pipOrpIndex: number;
+    if (type === 'bullet') {
+      ({ pip: pipString, orpIndex: pipOrpIndex } = this.buildUlPathPip(ancestors, total, index));
+    } else {
+      pipString = '·'.repeat(total);
+      pipOrpIndex = index;
+    }
+
+    this.addFrame(pipString, blockId, sectionId, { ...DEFAULT_FMT, italic: true }, false, listInfo, true, pipOrpIndex, true);
 
     if (item.tokens) {
       for (let i = 0; i < item.tokens.length; i++) {
@@ -529,7 +562,9 @@ class ParseContext {
           const t = token as Tokens.Text | Tokens.Paragraph;
           this.walkInlineTokens(t.tokens, blockId, sectionId, DEFAULT_FMT, listInfo, isLastToken);
         } else if (token.type === 'list') {
-          this.walkList(token as Tokens.List, blockId, sectionId, depth + 1);
+          // Pass current item as ancestor context into the nested list.
+          const newAncestors = [...ancestors, { total, activeIndex: index }];
+          this.walkList(token as Tokens.List, blockId, sectionId, depth + 1, newAncestors);
         }
       }
     }
