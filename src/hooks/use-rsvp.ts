@@ -52,8 +52,12 @@ export interface RsvpControls {
 export function useRsvp(
   frames: Frame[],
   initialWpm: number = DEFAULT_WPM,
+  initialFrameIndex?: number,
 ): [RsvpState, RsvpControls] {
   const [frameIndex, setFrameIndex] = useState(() => {
+    if (initialFrameIndex != null && initialFrameIndex > 0) {
+      return Math.max(0, Math.min(initialFrameIndex, frames.length - 1));
+    }
     let i = 0;
     while (i < frames.length - 1 && frames[i]?.heading) i++;
     return i;

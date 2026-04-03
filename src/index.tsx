@@ -13,13 +13,16 @@
 // The entry point reads the markdown file, parses it into the Document
 // model, and renders the full TUI application.
 
-import React from 'react';
+import React, { useState, useCallback } from 'react';
 import { render } from 'ink';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { parseDocument } from './parser.js';
 import { App } from './app.js';
 import { DEFAULT_WPM, MIN_WPM, MAX_WPM } from './types.js';
+import type { Document } from './types.js';
+import { loadProgressStore } from './progress.js';
+import { LibraryViewer } from './components/library-viewer.js';
 
 // ─── Argument Parsing ───────────────────────────────────────────────────────
 //
@@ -193,6 +196,47 @@ async function readStdin(): Promise<string> {
   });
 }
 
+// ─── Library → Reader wrapper ────────────────────────────────────────────────
+//
+// Rendered when no file is given. Starts in library mode; switches to the
+// main App when the user picks a file.
+
+interface LibraryRootProps {
+  initialWpm: number;
+}
+
+const LibraryRoot: React.FC<LibraryRootProps> = ({ initialWpm }) => {
+  const [readerState, setReaderState] = useState<{
+    doc: Document;
+    filePath: string;
+    frameIndex: number;
+    wpm: number;
+  } | null>(null);
+
+  const handleOpen = useCallback(
+    (filePath: string, frameIndex: number, wpm: number) => {
+      const markdown = fs.readFileSync(filePath, 'utf-8');
+      const doc = parseDocument(markdown);
+      setReaderState({ doc, filePath, frameIndex, wpm });
+    },
+    [],
+  );
+
+  if (readerState) {
+    return (
+      <App
+        doc={readerState.doc}
+        filePath={readerState.filePath}
+        initialFrameIndex={readerState.frameIndex}
+        initialWpm={readerState.wpm}
+        autoPlay={false}
+      />
+    );
+  }
+
+  return <LibraryViewer onOpen={handleOpen} />;
+};
+
 // ─── Main ───────────────────────────────────────────────────────────────────
 
 async function main() {
@@ -221,22 +265,26 @@ async function main() {
     process.exit(0);
   }
 
+  // ── Library mode (no file, interactive TTY) ───────────────
+  if (!args.filePath && process.stdin.isTTY) {
+    const { waitUntilExit } = render(
+      <LibraryRoot initialWpm={args.wpm} />,
+      { exitOnCtrlC: false },
+    );
+    await waitUntilExit();
+    return;
+  }
+
   // ── Read markdown content ──────────────────────────────────
   let markdown = '';
+  let resolvedFilePath: string | undefined;
 
   if (args.filePath) {
+    resolvedFilePath = path.resolve(process.cwd(), args.filePath);
     markdown = readMarkdownFile(args.filePath);
   } else if (!process.stdin.isTTY) {
     // Piped input: cat file.md | rmdp
     markdown = await readStdin();
-  } else {
-    // No file and no piped input — show usage
-    console.log(USAGE);
-    console.error(
-      '\x1b[31m✗ No input file specified.\x1b[0m\n' +
-        '  Pass a markdown file path or pipe content via stdin.\n',
-    );
-    process.exit(1);
   }
 
   if (!markdown.trim()) {
@@ -246,6 +294,18 @@ async function main() {
 
   // ── Parse the markdown ─────────────────────────────────────
   const doc = parseDocument(markdown);
+
+  // ── Check for saved progress ───────────────────────────────
+  let savedFrameIndex: number | undefined;
+  if (resolvedFilePath) {
+    const store = loadProgressStore();
+    const saved = store[resolvedFilePath];
+    if (saved && saved.frameIndex > 0) {
+      savedFrameIndex = saved.frameIndex;
+      const pct = Math.round((saved.frameIndex / Math.max(1, saved.totalFrames)) * 100);
+      console.error(`\x1b[33m→ Resuming from ${pct}%\x1b[0m  (Home/g to restart)\n`);
+    }
+  }
 
   // ── Summary ────────────────────────────────────────────────
   const sectionCount = doc.flatSections.length;
@@ -264,11 +324,14 @@ async function main() {
 
   // ── Render the TUI ─────────────────────────────────────────
   const { waitUntilExit } = render(
-    <App doc={doc} initialWpm={args.wpm} autoPlay={args.autoPlay} />,
-    {
-      // Use the full terminal (alternate screen)
-      exitOnCtrlC: false, // We handle Ctrl+C ourselves
-    },
+    <App
+      doc={doc}
+      filePath={resolvedFilePath}
+      initialWpm={args.wpm}
+      initialFrameIndex={savedFrameIndex}
+      autoPlay={args.autoPlay}
+    />,
+    { exitOnCtrlC: false },
   );
 
   await waitUntilExit();

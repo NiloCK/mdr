@@ -6,9 +6,11 @@
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Box, Text, useInput, useApp, useStdout } from 'ink';
+import * as path from 'node:path';
 
 import type { Document, ViewMode } from './types.js';
 import { SIDEBAR_MIN_WIDTH, SIDEBAR_MAX_FRACTION, DEFAULT_WPM } from './types.js';
+import { saveProgressEntry } from './progress.js';
 import { buildContext, sectionBreadcrumb } from './parser.js';
 import { useRsvp } from './hooks/use-rsvp.js';
 import { useDocument } from './hooks/use-document.js';
@@ -23,8 +25,12 @@ import { HelpOverlay } from './components/help-overlay.js';
 export interface AppProps {
   /** The parsed document to display */
   doc: Document;
+  /** Absolute resolved file path — used for progress persistence */
+  filePath?: string;
   /** Initial words-per-minute */
   initialWpm?: number;
+  /** Resume from a saved frame index */
+  initialFrameIndex?: number;
   /** Start playing immediately */
   autoPlay?: boolean;
 }
@@ -33,7 +39,9 @@ export interface AppProps {
 
 export const App: React.FC<AppProps> = ({
   doc,
+  filePath,
   initialWpm = DEFAULT_WPM,
+  initialFrameIndex,
   autoPlay = false,
 }) => {
   const { exit } = useApp();
@@ -66,7 +74,7 @@ export const App: React.FC<AppProps> = ({
   const [enriched, setEnriched] = useState(true);
 
   // ── RSVP engine ────────────────────────────────────────────
-  const [rsvpState, rsvpControls] = useRsvp(doc.frames, initialWpm);
+  const [rsvpState, rsvpControls] = useRsvp(doc.frames, initialWpm, initialFrameIndex);
 
   // Auto-play on mount if requested
   useEffect(() => {
@@ -156,6 +164,19 @@ export const App: React.FC<AppProps> = ({
 
     // ── Global keybindings ───────────────────────────────────
     if (input === 'q' || (key.ctrl && input === 'c')) {
+      if (filePath) {
+        const title =
+          doc.sections[0]?.title ??
+          path.basename(filePath, path.extname(filePath));
+        saveProgressEntry({
+          filePath,
+          title,
+          frameIndex: rsvpState.frameIndex,
+          totalFrames: doc.frames.length,
+          wpm: rsvpState.wpm,
+          lastRead: new Date().toISOString(),
+        });
+      }
       exit();
       return;
     }
